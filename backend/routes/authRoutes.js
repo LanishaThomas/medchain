@@ -63,7 +63,21 @@ router.post(
 );
 
 // ============================================
-// PATIENT OTP FLOW
+// PATIENT REGISTRATION
+// ============================================
+
+/**
+ * @route   POST /api/auth/patient/register
+ * @desc    Register a new patient with email/password
+ * @access  Public
+ */
+router.post(
+  "/patient/register",
+  authController.registerPatient
+);
+
+// ============================================
+// PATIENT OTP FLOW (DEPRECATED)
 // ============================================
 
 /**

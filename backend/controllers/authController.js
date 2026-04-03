@@ -266,7 +266,95 @@ exports.registerDoctor = async (req, res, next) => {
 };
 
 // ============================================
-// PATIENT REGISTRATION (OTP)
+// PATIENT REGISTRATION (PASSWORD)
+// ============================================
+
+/**
+ * @desc    Register a patient with email/password
+ * @route   POST /api/auth/patient/register
+ * @access  Public
+ */
+exports.registerPatient = async (req, res, next) => {
+  try {
+    const {
+      firstName,
+      lastName,
+      email,
+      password,
+      phone,
+      dateOfBirth,
+      gender,
+      bloodType,
+      allergies,
+      chronicConditions
+    } = req.body;
+
+    // Check if email already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered'
+      });
+    }
+
+    // Check if phone already exists
+    if (phone) {
+      const existingPhone = await User.findOne({ phone });
+      if (existingPhone) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number already registered'
+        });
+      }
+    }
+
+    // Create patient user
+    const patient = await User.create({
+      email,
+      password,
+      phone,
+      firstName,
+      lastName,
+      role: 'patient',
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+      gender,
+      patientProfile: {
+        bloodType,
+        allergies: allergies || [],
+        chronicConditions: chronicConditions || []
+      }
+    });
+
+    // Generate tokens
+    const tokens = generateAuthTokens(patient);
+    
+    // Store refresh token
+    patient.addRefreshToken(tokens.refreshToken, req.headers['user-agent'], req.ip);
+    await patient.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Patient registered successfully',
+      data: {
+        user: {
+          id: patient._id,
+          email: patient.email,
+          firstName: patient.firstName,
+          lastName: patient.lastName,
+          role: patient.role
+        },
+        tokens
+      }
+    });
+  } catch (error) {
+    console.error('Patient registration error:', error);
+    next(error);
+  }
+};
+
+// ============================================
+// PATIENT REGISTRATION (OTP) - DEPRECATED
 // ============================================
 
 /**
