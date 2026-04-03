@@ -102,10 +102,12 @@ exports.isHospitalAdmin = (req, res, next) => {
  * Check if user is a doctor
  */
 exports.isDoctor = (req, res, next) => {
+  console.log('🔍 isDoctor check:', { userId: req.user?.id, role: req.user?.role, email: req.user?.email });
   if (req.user.role !== "doctor") {
+    console.log('❌ isDoctor FAILED - user role is:', req.user.role);
     return res.status(403).json({
       success: false,
-      message: "This action requires doctor privileges."
+      message: `This action requires doctor privileges. Your role: ${req.user.role}`
     });
   }
   next();

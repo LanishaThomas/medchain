@@ -33,7 +33,7 @@ app.use(cors({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 1000, // Increased for development - 1000 requests per 15 min
   message: {
     success: false,
     message: 'Too many requests, please try again later.'
@@ -43,7 +43,7 @@ const limiter = rateLimit({
 // Apply rate limiting to auth routes
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20, // Stricter limit for auth
+  max: 100, // Increased for development
   message: {
     success: false,
     message: 'Too many authentication attempts, please try again later.'

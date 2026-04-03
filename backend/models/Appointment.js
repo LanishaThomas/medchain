@@ -157,7 +157,7 @@ const appointmentSchema = new mongoose.Schema({
 });
 
 // Generate appointment number before save
-appointmentSchema.pre('save', async function(next) {
+appointmentSchema.pre('save', async function() {
   if (!this.appointmentNumber) {
     const date = new Date();
     const prefix = `APT${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -166,7 +166,6 @@ appointmentSchema.pre('save', async function(next) {
     });
     this.appointmentNumber = `${prefix}${String(count + 1).padStart(4, '0')}`;
   }
-  next();
 });
 
 // Virtual for final confirmed date/time

@@ -10,7 +10,7 @@ const DoctorHospitalMapping = require('../models/DoctorHospitalMapping');
  */
 const requestAppointment = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;  // Changed from req.user._id to req.user.id
     const { 
       doctorId, 
       hospitalId,
@@ -25,34 +25,53 @@ const requestAppointment = async (req, res) => {
 
     // Validate required fields
     if (!doctorId || !requestedDate || !requestedTime || !reason) {
+      console.log('❌ Validation failed:', { doctorId, requestedDate, requestedTime, reason });
       return res.status(400).json({
         success: false,
         message: 'Doctor, date, time, and reason are required'
       });
     }
 
+    console.log('✅ Patient ID:', patientId);
+    console.log('✅ Request data:', {
+      patientId,
+      doctorId,
+      hospitalId,
+      requestedDate,
+      requestedTime,
+      reason,
+      appointmentType,
+      priority
+    });
+
     // Verify doctor exists and is approved at hospital
+    console.log('🔍 Verifying doctor:', doctorId);
     const doctor = await User.findOne({ _id: doctorId, role: 'doctor' });
     if (!doctor) {
+      console.log('❌ Doctor not found:', doctorId);
       return res.status(404).json({
         success: false,
         message: 'Doctor not found'
       });
     }
+    console.log('✅ Doctor found:', doctor.firstName, doctor.lastName);
 
     // If hospital specified, verify doctor is approved there
     if (hospitalId) {
+      console.log('🔍 Verifying hospital mapping:', { doctorId, hospitalId });
       const mapping = await DoctorHospitalMapping.findOne({
         doctor: doctorId,
         hospital: hospitalId,
         status: 'approved'
       });
       if (!mapping) {
+        console.log('❌ No approved mapping found');
         return res.status(400).json({
           success: false,
           message: 'Doctor is not affiliated with this hospital'
         });
       }
+      console.log('✅ Mapping verified');
     }
 
     // Check for conflicting appointments (same doctor, same time, same date)
@@ -75,6 +94,7 @@ const requestAppointment = async (req, res) => {
     }
 
     // Create appointment request
+    console.log('📝 Creating appointment...');
     const appointment = new Appointment({
       patient: patientId,
       doctor: doctorId,
@@ -90,11 +110,15 @@ const requestAppointment = async (req, res) => {
       requestedAt: new Date()
     });
 
+    console.log('💾 Saving appointment...');
     await appointment.save();
+    console.log('✅ Appointment saved:', appointment._id);
 
     // Populate for response
-    await appointment.populate('doctor', 'firstName lastName specialization');
+    console.log('📦 Populating appointment data...');
+    await appointment.populate('doctor', 'firstName lastName doctorProfile');
     await appointment.populate('hospital', 'name');
+    console.log('✅ Populated successfully');
 
     res.status(201).json({
       success: true,
@@ -105,7 +129,7 @@ const requestAppointment = async (req, res) => {
         doctor: {
           id: appointment.doctor._id,
           name: `Dr. ${appointment.doctor.firstName} ${appointment.doctor.lastName}`,
-          specialization: appointment.doctor.specialization
+          specialization: appointment.doctor.doctorProfile?.specializations?.[0] || 'General Medicine'
         },
         hospital: appointment.hospital ? appointment.hospital.name : null,
         requestedDate: appointment.requestedDate,
@@ -139,14 +163,14 @@ const requestAppointment = async (req, res) => {
  */
 const getMyAppointments = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     const { status, page = 1, limit = 10 } = req.query;
 
     const query = { patient: patientId };
     if (status) query.status = status;
 
     const appointments = await Appointment.find(query)
-      .populate('doctor', 'firstName lastName specialization phone')
+      .populate('doctor', 'firstName lastName doctorProfile phone')
       .populate('hospital', 'name address')
       .sort({ requestedDate: -1 })
       .skip((page - 1) * limit)
@@ -162,7 +186,7 @@ const getMyAppointments = async (req, res) => {
         doctor: {
           id: apt.doctor._id,
           name: `Dr. ${apt.doctor.firstName} ${apt.doctor.lastName}`,
-          specialization: apt.doctor.specialization,
+          specialization: apt.doctor.doctorProfile?.specializations?.[0] || 'General Medicine',
           phone: apt.doctor.phone
         },
         hospital: apt.hospital ? {
@@ -208,7 +232,7 @@ const getMyAppointments = async (req, res) => {
  */
 const getPendingAppointments = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
 
     const appointments = await Appointment.find({
       doctor: doctorId,
@@ -263,7 +287,7 @@ const getPendingAppointments = async (req, res) => {
  */
 const getDoctorAppointments = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     const { status, date, page = 1, limit = 20 } = req.query;
 
     const query = { doctor: doctorId };
@@ -368,7 +392,7 @@ const getDoctorAppointments = async (req, res) => {
  */
 const getTodayAppointments = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -425,7 +449,7 @@ const getTodayAppointments = async (req, res) => {
  */
 const approveAppointment = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     const { id } = req.params;
     const { approvedDate, approvedTime, notes, meetingLink } = req.body;
 
@@ -496,7 +520,7 @@ const approveAppointment = async (req, res) => {
  */
 const rejectAppointment = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     const { id } = req.params;
     const { reason } = req.body;
 
@@ -566,7 +590,7 @@ const rejectAppointment = async (req, res) => {
  */
 const rescheduleAppointment = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     const { id } = req.params;
     const { proposedDate, proposedTime, message } = req.body;
 
@@ -675,7 +699,7 @@ const rescheduleAppointment = async (req, res) => {
  */
 const acceptReschedule = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     const { id } = req.params;
 
     const appointment = await Appointment.findById(id);
@@ -742,7 +766,7 @@ const acceptReschedule = async (req, res) => {
  */
 const declineReschedule = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     const { id } = req.params;
 
     const appointment = await Appointment.findById(id);
@@ -805,7 +829,7 @@ const declineReschedule = async (req, res) => {
  */
 const cancelAppointment = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
     const userRole = req.user.role;
     const { id } = req.params;
     const { reason } = req.body;
@@ -873,7 +897,7 @@ const cancelAppointment = async (req, res) => {
  */
 const completeAppointment = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     const { id } = req.params;
     const { notes } = req.body;
 
@@ -936,7 +960,7 @@ const completeAppointment = async (req, res) => {
  */
 const markNoShow = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     const { id } = req.params;
 
     const appointment = await Appointment.findById(id);
@@ -1005,18 +1029,23 @@ const getAvailableDoctors = async (req, res) => {
     const mappings = await DoctorHospitalMapping.find(query)
       .populate({
         path: 'doctor',
-        select: 'firstName lastName specialization phone email',
-        match: specialization ? { specialization } : {}
+        select: 'firstName lastName doctorProfile phone email'
       })
       .populate('hospital', 'name address');
 
-    // Filter out null doctors (from specialization mismatch)
+    // Filter out null doctors and by specialization if provided
     const doctors = mappings
-      .filter(m => m.doctor)
+      .filter(m => {
+        if (!m.doctor) return false;
+        if (specialization) {
+          return m.doctor.doctorProfile?.specializations?.includes(specialization);
+        }
+        return true;
+      })
       .map(m => ({
         id: m.doctor._id,
         name: `Dr. ${m.doctor.firstName} ${m.doctor.lastName}`,
-        specialization: m.doctor.specialization,
+        specialization: m.doctor.doctorProfile?.specializations?.[0] || 'General Medicine',
         hospital: {
           id: m.hospital._id,
           name: m.hospital.name,
@@ -1059,12 +1088,12 @@ const getAvailableDoctors = async (req, res) => {
  */
 const getAppointmentById = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
     const { id } = req.params;
 
     const appointment = await Appointment.findById(id)
       .populate('patient', 'firstName lastName phone email dateOfBirth gender')
-      .populate('doctor', 'firstName lastName specialization phone email')
+      .populate('doctor', 'firstName lastName doctorProfile phone email')
       .populate('hospital', 'name address phone');
 
     if (!appointment) {
@@ -1101,7 +1130,7 @@ const getAppointmentById = async (req, res) => {
         doctor: {
           id: appointment.doctor._id,
           name: `Dr. ${appointment.doctor.firstName} ${appointment.doctor.lastName}`,
-          specialization: appointment.doctor.specialization,
+          specialization: appointment.doctor.doctorProfile?.specializations?.[0] || 'General Medicine',
           phone: appointment.doctor.phone,
           email: appointment.doctor.email
         },
