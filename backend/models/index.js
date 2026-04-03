@@ -7,5 +7,6 @@ module.exports = {
   Prescription: require('./Prescription'),
   Appointment: require('./Appointment'),
   EmergencyAccessLog: require('./EmergencyAccessLog'),
-  Notification: require('./Notification')
+  Notification: require('./Notification'),
+  MoodEntry: require('./MoodEntry')
 };
