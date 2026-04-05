@@ -25,6 +25,13 @@ router.post('/request-access', isDoctor, permissionController.requestAccess);
 router.get('/my-requests', isDoctor, permissionController.getMyAccessRequests);
 
 /**
+ * @route   GET /api/permissions/doctor/approved
+ * @desc    Get doctor's approved permissions (patients they can access)
+ * @access  Private (Doctor)
+ */
+router.get('/doctor/approved', isDoctor, permissionController.getDoctorApprovedPermissions);
+
+/**
  * @route   GET /api/permissions/search-patients
  * @desc    Search for patients to request access
  * @access  Private (Doctor)

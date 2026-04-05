@@ -174,7 +174,7 @@ permissionSchema.statics.hasAccess = async function(patientId, doctorId, accessT
   const permission = await this.findOne({
     patient: patientId,
     doctor: doctorId,
-    accessType: accessType,
+    accessType: { $in: [accessType, 'full_access'] },
     status: 'approved',
     expiryDate: { $gt: new Date() }
   });

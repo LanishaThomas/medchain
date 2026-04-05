@@ -567,3 +567,54 @@ exports.checkAccess = async (req, res, next) => {
     next(error);
   }
 };
+
+// ============================================
+// DOCTOR: GET APPROVED PERMISSIONS
+// ============================================
+
+/**
+ * @desc    Get doctor's approved permissions (patients they can access)
+ * @route   GET /api/permissions/doctor/approved
+ * @access  Private (Doctor)
+ */
+exports.getDoctorApprovedPermissions = async (req, res, next) => {
+  try {
+    const doctorId = req.user.id;
+
+    // Find all approved, non-expired permissions for this doctor
+    const permissions = await Permission.find({
+      doctor: doctorId,
+      status: 'approved',
+      expiryDate: { $gt: new Date() }
+    })
+      .populate('patient', 'firstName lastName email phone')
+      .populate('hospital', 'name')
+      .sort({ approvedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        count: permissions.length,
+        permissions: permissions.map(p => ({
+          _id: p._id,
+          patient: {
+            _id: p.patient._id,
+            firstName: p.patient.firstName,
+            lastName: p.patient.lastName,
+            email: p.patient.email,
+            phone: p.patient.phone
+          },
+          accessType: p.accessType,
+          status: p.status,
+          expiryDate: p.expiryDate,
+          allowedActions: p.allowedActions,
+          lastAccessedAt: p.lastAccessedAt,
+          accessCount: p.accessCount,
+          hospital: p.hospital ? { name: p.hospital.name } : null
+        }))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

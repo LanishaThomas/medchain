@@ -532,9 +532,11 @@ exports.getHospitalProfile = async (req, res, next) => {
     }
 
     // Get counts
-    const [approvedDoctors, pendingApplications] = await Promise.all([
+    const MedicalRecord = require('../models/MedicalRecord');
+    const [approvedDoctors, pendingApplications, totalRecords] = await Promise.all([
       DoctorHospitalMapping.countDocuments({ hospital: hospital._id, status: 'approved' }),
-      DoctorHospitalMapping.countDocuments({ hospital: hospital._id, status: 'pending' })
+      DoctorHospitalMapping.countDocuments({ hospital: hospital._id, status: 'pending' }),
+      MedicalRecord.countDocuments({ hospital: hospital._id, status: 'active' })
     ]);
 
     res.status(200).json({
@@ -573,7 +575,8 @@ exports.getHospitalProfile = async (req, res, next) => {
         },
         stats: {
           approvedDoctors,
-          pendingApplications
+          pendingApplications,
+          totalRecords
         }
       }
     });
