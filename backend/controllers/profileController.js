@@ -13,9 +13,28 @@ const crypto = require('crypto');
  */
 exports.getPatientProfile = async (req, res) => {
   try {
-    const patient = await User.findById(req.user._id);
+    console.log('📋 getPatientProfile called:', {
+      userId: req.user?.id,
+      userRole: req.user?.role,
+      email: req.user?.email
+    });
+    
+    const patient = await User.findById(req.user.id);
+    
+    console.log('👤 Patient from DB:', {
+      found: !!patient,
+      userId: patient?._id,
+      role: patient?.role,
+      email: patient?.email
+    });
     
     if (!patient || patient.role !== 'patient') {
+      console.log('❌ Profile access denied:', {
+        patientFound: !!patient,
+        patientRole: patient?.role,
+        expectedRole: 'patient',
+        mismatch: patient && patient.role !== 'patient'
+      });
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
     
@@ -53,7 +72,7 @@ exports.getPatientProfile = async (req, res) => {
  */
 exports.updatePatientProfile = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     const {
       firstName,
       lastName,
@@ -139,7 +158,7 @@ exports.updatePatientProfile = async (req, res) => {
  */
 exports.getPatientEmergencyInfo = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     const { patientId } = req.params;
     
     // Check if doctor has permission
@@ -187,19 +206,19 @@ exports.getPatientEmergencyInfo = async (req, res) => {
 exports.getDoctorProfile = async (req, res) => {
   try {
     console.log('📋 getDoctorProfile called:', {
-      userId: req.user?._id,
+      userId: req.user?.id,
       userRole: req.user?.role,
       doctorId: req.params.doctorId,
       authRequired: !!req.user
     });
     
     const { doctorId } = req.params;
-    const isOwnProfile = !doctorId || doctorId === req.user?._id?.toString();
+    const isOwnProfile = !doctorId || doctorId === req.user?.id?.toString();
     
     let doctor;
     
     if (isOwnProfile && req.user) {
-      doctor = await User.findById(req.user._id);
+      doctor = await User.findById(req.user.id);
     } else {
       // Public profile - check if public
       doctor = await User.findById(doctorId);
@@ -326,7 +345,7 @@ exports.getDoctorProfileBySlug = async (req, res) => {
  */
 exports.updateDoctorProfile = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     const {
       firstName,
       lastName,
@@ -423,7 +442,7 @@ exports.updateDoctorProfile = async (req, res) => {
  */
 exports.generateShareableSlug = async (req, res) => {
   try {
-    const doctorId = req.user._id;
+    const doctorId = req.user.id;
     const doctor = await User.findById(doctorId);
     
     if (!doctor || doctor.role !== 'doctor') {

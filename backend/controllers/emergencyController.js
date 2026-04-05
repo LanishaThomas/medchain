@@ -15,7 +15,7 @@ const { encrypt, decrypt, generateAccessToken, hashToken } = require('../utils/e
  */
 exports.generateEmergencyQR = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     const { duration } = req.body; // Optional: custom duration in minutes
     
     // Get patient
@@ -99,7 +99,7 @@ exports.generateEmergencyQR = async (req, res) => {
  */
 exports.updateEmergencySettings = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     const { accessDuration } = req.body;
     
     // Validate duration (5-120 minutes)
@@ -147,8 +147,8 @@ exports.accessEmergencyData = async (req, res) => {
     // Get hospital
     const hospital = await Hospital.findOne({
       $or: [
-        { primaryAdmin: accessingUser._id },
-        { additionalAdmins: accessingUser._id }
+        { primaryAdmin: accessingUser.id },
+        { additionalAdmins: accessingUser.id }
       ]
     });
     
@@ -327,7 +327,7 @@ exports.accessEmergencyData = async (req, res) => {
  */
 exports.getAccessHistory = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     const { page = 1, limit = 10 } = req.query;
     
     const logs = await EmergencyAccessLog.getPatientHistory(patientId, {
@@ -362,7 +362,7 @@ exports.getAccessHistory = async (req, res) => {
  */
 exports.getActiveSessions = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     
     const sessions = await EmergencyAccessLog.getActiveSessions(patientId);
     
@@ -383,7 +383,7 @@ exports.getActiveSessions = async (req, res) => {
  */
 exports.revokeAccess = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     const { logId } = req.params;
     const { reason } = req.body;
     
@@ -435,7 +435,7 @@ exports.revokeAccess = async (req, res) => {
  */
 exports.reviewAccessLog = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     const { logId } = req.params;
     const { flaggedAsSuspicious, notes } = req.body;
     
@@ -475,7 +475,7 @@ exports.reviewAccessLog = async (req, res) => {
  */
 exports.invalidateCurrentQR = async (req, res) => {
   try {
-    const patientId = req.user._id;
+    const patientId = req.user.id;
     
     // Generate new token hash (invalidates old QR)
     const newToken = generateAccessToken();
