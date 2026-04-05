@@ -205,7 +205,7 @@ exports.accessEmergencyData = async (req, res) => {
     // Create emergency access log
     const accessLog = await EmergencyAccessLog.create({
       hospital: hospital._id,
-      accessedByUser: accessingUser._id,
+      accessedByUser: accessingUser.id,
       patient: patientId,
       accessToken: hashedToken,
       expiresAt: new Date(expiryTime),
