@@ -55,21 +55,82 @@ const userSchema = new mongoose.Schema({
       year: Number
     }],
     yearsOfExperience: Number,
-    bio: String
+    bio: String,
+    // Credentials for public profile
+    certificates: [{
+      title: { type: String, required: true },
+      issuingOrganization: String,
+      issueDate: Date,
+      expiryDate: Date,
+      certificateUrl: String, // Cloudinary URL
+      verificationUrl: String
+    }],
+    achievements: [{
+      title: { type: String, required: true },
+      description: String,
+      date: Date,
+      category: { type: String, enum: ['award', 'publication', 'research', 'fellowship', 'other'] }
+    }],
+    consultationFee: Number,
+    languages: [String],
+    // Profile sharing settings
+    profileSettings: {
+      isPublic: { type: Boolean, default: true },
+      showEmail: { type: Boolean, default: false },
+      showPhone: { type: Boolean, default: false },
+      shareableSlug: String // unique URL slug for profile
+    }
   },
   
   // Patient-specific
   patientProfile: {
+    // Basic mandatory health info (required for emergency access)
     bloodType: { type: String, enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] },
-    allergies: [String],
-    chronicConditions: [String],
-    emergencyContacts: [{
-      name: String,
-      relationship: String,
-      phone: String
+    allergies: [{
+      allergen: { type: String, required: true },
+      severity: { type: String, enum: ['mild', 'moderate', 'severe', 'life-threatening'] },
+      reaction: String
     }],
+    currentMedications: [{
+      name: { type: String, required: true },
+      dosage: String,
+      frequency: String,
+      prescribedFor: String,
+      startDate: Date
+    }],
+    previousSurgeries: [{
+      name: { type: String, required: true },
+      date: Date,
+      hospital: String,
+      notes: String
+    }],
+    chronicConditions: [String],
+    // Address (required)
+    address: {
+      street: String,
+      city: String,
+      state: String,
+      zipCode: String,
+      country: { type: String, default: 'India' }
+    },
+    // Emergency contacts (required for emergency access)
+    emergencyContacts: [{
+      name: { type: String, required: true },
+      relationship: { type: String, required: true },
+      phone: { type: String, required: true },
+      isPrimary: { type: Boolean, default: false }
+    }],
+    // Insurance
     insuranceProvider: String,
-    insurancePolicyNumber: String
+    insurancePolicyNumber: String,
+    // Emergency QR settings
+    emergencySettings: {
+      accessDuration: { type: Number, default: 30 }, // minutes
+      lastQrGenerated: Date,
+      qrAccessToken: String // encrypted token for validation
+    },
+    // Profile completion tracking
+    isProfileComplete: { type: Boolean, default: false }
   },
   
   // Caregiver-specific

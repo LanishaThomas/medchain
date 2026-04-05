@@ -8,12 +8,14 @@ import PatientPermissionsComponent from './permissions';
 import BookAppointmentComponent from './book-appointment';
 import MentalHealthComponent from './mental-health';
 import MedicalRecordsComponent from './medical-records';
+import PatientProfilePage from './profile';
+import EmergencyQRPage from './emergency-qr';
 
 export default function PatientDashboard() {
   const router = useRouter();
   const { user, isLoading, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'records' | 'permissions' | 'mental-health'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'records' | 'permissions' | 'mental-health' | 'profile' | 'emergency'>('overview');
   
   // Dashboard states
   const [stats, setStats] = useState({
@@ -26,7 +28,7 @@ export default function PatientDashboard() {
     try {
       if (!user) return;
       const [appointmentsRes, recordsRes, permissionsRes] = await Promise.all([
-        api.get('/appointments/patient'),
+        api.get('/appointments/my-appointments'),
         api.get('/medical-records/stats/summary'),
         api.get('/permissions')
       ]);
@@ -171,6 +173,26 @@ export default function PatientDashboard() {
             >
               🧠 Mental Health
             </button>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`px-4 py-3 font-medium border-b-2 transition ${
+                activeTab === 'profile'
+                  ? 'border-purple-600 text-purple-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              👤 Profile
+            </button>
+            <button
+              onClick={() => setActiveTab('emergency')}
+              className={`px-4 py-3 font-medium border-b-2 transition ${
+                activeTab === 'emergency'
+                  ? 'border-red-600 text-red-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              🚨 Emergency QR
+            </button>
           </div>
         </div>
 
@@ -228,9 +250,19 @@ export default function PatientDashboard() {
               <span className="text-2xl mb-2 block">🤖</span>
               <span className="text-sm font-medium text-purple-700">AI Assistant</span>
             </button>
-            <button className="p-4 border rounded-lg hover:bg-gray-50 text-center">
+            <button 
+              onClick={() => setActiveTab('profile')}
+              className="p-4 border rounded-lg hover:bg-gray-50 text-center"
+            >
               <span className="text-2xl mb-2 block">👤</span>
               <span className="text-sm font-medium">Profile</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('emergency')}
+              className="p-4 border-2 border-red-200 rounded-lg hover:bg-red-50 text-center"
+            >
+              <span className="text-2xl mb-2 block">🚨</span>
+              <span className="text-sm font-medium text-red-700">Emergency QR</span>
             </button>
           </div>
         </div>
@@ -264,6 +296,16 @@ export default function PatientDashboard() {
         {/* Mental Health Tab */}
         {activeTab === 'mental-health' && (
           <MentalHealthComponent />
+        )}
+
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <PatientProfilePage />
+        )}
+
+        {/* Emergency QR Tab */}
+        {activeTab === 'emergency' && (
+          <EmergencyQRPage />
         )}
       </div>
     </div>

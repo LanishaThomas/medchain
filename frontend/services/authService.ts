@@ -137,6 +137,24 @@ class AuthService {
 
   // Token Management
   setTokens(tokens: Tokens) {
+    console.log('🔑 Setting tokens...', {
+      accessToken: tokens.accessToken.substring(0, 20) + '...',
+      expiresAt: tokens.expiresAt
+    });
+    
+    // Decode and log the token payload
+    try {
+      const decoded = jwtDecode(tokens.accessToken) as any;
+      console.log('📋 Token decoded:', {
+        id: decoded.id,
+        email: decoded.email,
+        role: decoded.role,
+        exp: decoded.exp
+      });
+    } catch (e) {
+      console.error('❌ Failed to decode token:', e);
+    }
+    
     localStorage.setItem('accessToken', tokens.accessToken);
     localStorage.setItem('refreshToken', tokens.refreshToken);
     localStorage.setItem('tokenExpiry', tokens.expiresAt);
@@ -181,6 +199,8 @@ class AuthService {
   async registerHospital(data: any) {
     const response = await this.client.post('/auth/hospital/register', data);
     const { tokens, admin, hospital } = response.data.data;
+    console.log('✅ Hospital registered. Admin object:', admin);
+    this.clearTokens();
     this.setTokens(tokens);
     localStorage.setItem('user', JSON.stringify({ ...admin, hospitalId: hospital.id }));
     return response.data;
@@ -189,6 +209,9 @@ class AuthService {
   async registerDoctor(data: any) {
     const response = await this.client.post('/auth/doctor/register', data);
     const { tokens, user } = response.data.data;
+    console.log('✅ Doctor registered. User object:', user);
+    // Clear any existing tokens before setting new ones
+    this.clearTokens();
     this.setTokens(tokens);
     localStorage.setItem('user', JSON.stringify(user));
     return response.data;
@@ -197,6 +220,8 @@ class AuthService {
   async registerPatient(data: any) {
     const response = await this.client.post('/auth/patient/register', data);
     const { tokens, user } = response.data.data || response.data;
+    console.log('✅ Patient registered. User object:', user);
+    this.clearTokens();
     this.setTokens(tokens);
     localStorage.setItem('user', JSON.stringify(user));
     return response.data;

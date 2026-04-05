@@ -157,6 +157,16 @@ exports.registerHospital = async (req, res, next) => {
  */
 exports.registerDoctor = async (req, res, next) => {
   try {
+    console.log('📝 Doctor registration request:', {
+      email: req.body.email,
+      firstName: req.body.firstName,
+      lastName: req.body.lastName,
+      phone: req.body.phone,
+      licenseNumber: req.body.licenseNumber,
+      specializations: req.body.specializations,
+      hospitalId: req.body.hospitalId
+    });
+    
     const {
       firstName,
       lastName,
@@ -261,6 +271,12 @@ exports.registerDoctor = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('❌ Doctor registration error:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      details: error.errors ? Object.entries(error.errors).map(([k, v]) => `${k}: ${v.message}`) : 'N/A'
+    });
     next(error);
   }
 };

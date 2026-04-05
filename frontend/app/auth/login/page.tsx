@@ -27,6 +27,8 @@ export default function LoginPage() {
   
   // Doctor fields
   const [licenseNumber, setLicenseNumber] = useState('');
+  const [licenseState, setLicenseState] = useState('');
+  const [licenseExpiry, setLicenseExpiry] = useState('');
   const [specialization, setSpecialization] = useState('');
   const [hospitalId, setHospitalId] = useState('');
   const [hospitals, setHospitals] = useState<any[]>([]);
@@ -47,10 +49,13 @@ export default function LoginPage() {
     try {
       const response = await authService.client.get('/auth/hospitals');
       if (response.data.success) {
-        setHospitals(response.data.data);
+        // API returns: { success: true, data: { count, hospitals: [...] } }
+        const hospitalsData = response.data.data?.hospitals || [];
+        setHospitals(Array.isArray(hospitalsData) ? hospitalsData : []);
       }
     } catch (err) {
       console.error('Failed to fetch hospitals:', err);
+      setHospitals([]); // Set empty array on error
     }
   };
 
@@ -113,6 +118,13 @@ export default function LoginPage() {
     setSuccess('');
     setIsLoading(true);
 
+    // Validate required fields
+    if (!firstName || !lastName || !email || !password || !phone || !licenseNumber || !licenseState) {
+      setError('All marked fields are required');
+      setIsLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       setIsLoading(false);
@@ -126,16 +138,38 @@ export default function LoginPage() {
     }
 
     try {
-      await authService.registerDoctor({
-        firstName, lastName, email, password, phone,
+      const doctorData = {
+        firstName, 
+        lastName, 
+        email, 
+        password, 
+        phone,
         licenseNumber,
+        licenseState,
+        licenseExpiry: licenseExpiry || undefined,
         specializations: specialization ? [specialization] : [],
         hospitalId
-      });
+      };
+      console.log('📤 Doctor registration data:', doctorData);
+      await authService.registerDoctor(doctorData);
       setSuccess('Registration submitted! Awaiting hospital approval...');
       setTimeout(() => router.push('/dashboard/doctor'), 2000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed');
+      const errorData = err.response?.data;
+      console.error('❌ Registration error full:', errorData);
+      
+      let errorMessage = 'Registration failed';
+      
+      if (errorData?.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+        // Log all validation errors
+        console.error('Validation errors:', errorData.errors);
+        // Show all field errors
+        errorMessage = errorData.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ');
+      } else if (errorData?.message) {
+        errorMessage = errorData.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -439,6 +473,18 @@ export default function LoginPage() {
                 <input type="text" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">License State/Province *</label>
+                  <input type="text" value={licenseState} onChange={e => setLicenseState(e.target.value)} required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., CA" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">License Expiry</label>
+                  <input type="date" value={licenseExpiry} onChange={e => setLicenseExpiry(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Specialization</label>
                 <input type="text" value={specialization} onChange={e => setSpecialization(e.target.value)}
@@ -449,8 +495,8 @@ export default function LoginPage() {
                 <select value={hospitalId} onChange={e => setHospitalId(e.target.value)} required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
                   <option value="">Choose a hospital...</option>
-                  {hospitals.map((h: any) => (
-                    <option key={h.id} value={h.id}>{h.name}</option>
+                  {Array.isArray(hospitals) && hospitals.map((h: any) => (
+                    <option key={h.id || h._id} value={h.id || h._id}>{h.name}</option>
                   ))}
                 </select>
                 <p className="text-xs text-gray-500 mt-1">You'll need hospital approval to practice</p>

@@ -14,11 +14,42 @@ const getFileType = (mimetype) => {
   return 'other';
 };
 
+// Multer error handler middleware
+const handleMulterError = (err, req, res, next) => {
+  if (err) {
+    console.error('❌ Multer error:', err.message);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: 'File too large. Maximum size is 10MB.'
+      });
+    }
+    if (err.message && err.message.includes('Invalid file type')) {
+      return res.status(400).json({
+        success: false,
+        message: err.message + '. Allowed types: JPEG, PNG, GIF, PDF, DOC, DOCX'
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      message: err.message || 'File upload error'
+    });
+  }
+  next();
+};
+
 // ==========================================
 // UPLOAD MEDICAL RECORD  (multer saves to disk, then optionally to Cloudinary)
 // ==========================================
 
-router.post('/upload', protect, upload.single('file'), async (req, res) => {
+router.post('/upload', protect, (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      return handleMulterError(err, req, res, next);
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     console.log('📤 Upload request:', {
       user: req.user?.email,

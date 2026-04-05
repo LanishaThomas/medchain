@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { authService } from '@/services/authService';
+import EmergencyAccessPage from './emergency-access';
 
 interface DoctorApplication {
   applicationId: string;
@@ -38,6 +39,7 @@ export default function HospitalDashboard() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'emergency'>('overview');
 
   const handleLogout = async () => {
     try {
@@ -172,7 +174,51 @@ export default function HospitalDashboard() {
             <p className="text-sm text-red-700">{error}</p>
           </div>
         )}
+
+        {/* Tabs */}
+        <div className="mb-8 border-b border-gray-200">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-4 py-3 font-medium border-b-2 transition ${
+                activeTab === 'overview'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              📊 Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('applications')}
+              className={`px-4 py-3 font-medium border-b-2 transition ${
+                activeTab === 'applications'
+                  ? 'border-yellow-600 text-yellow-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              📋 Doctor Applications
+              {stats.pendingApplications > 0 && (
+                <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-500 text-white rounded-full">
+                  {stats.pendingApplications}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('emergency')}
+              className={`px-4 py-3 font-medium border-b-2 transition ${
+                activeTab === 'emergency'
+                  ? 'border-red-600 text-red-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              🚨 Emergency Access
+            </button>
+          </div>
+        </div>
         
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow">
@@ -251,6 +297,77 @@ export default function HospitalDashboard() {
             </div>
           )}
         </div>
+        </>
+        )}
+
+        {/* Applications Tab (Same as overview but just applications) */}
+        {activeTab === 'applications' && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Doctor Applications ({pendingDoctors.length} pending)
+              </h2>
+            </div>
+
+            {pendingDoctors.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <p className="text-lg">No pending applications</p>
+                <p className="text-sm mt-2">All applications have been reviewed</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {pendingDoctors.map((app) => (
+                  <div key={app.applicationId} className="p-6">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          Dr. {app.doctor.fullName}
+                        </h3>
+                        <div className="mt-2 grid grid-cols-2 gap-4 text-sm text-gray-600">
+                          <p><strong>Email:</strong> {app.doctor.email}</p>
+                          <p><strong>Phone:</strong> {app.doctor.phone || 'N/A'}</p>
+                          <p><strong>License:</strong> {app.doctor.licenseNumber || 'N/A'}</p>
+                          <p><strong>Experience:</strong> {app.doctor.yearsOfExperience || 0} years</p>
+                          <p><strong>Specializations:</strong> {app.doctor.specializations?.join(', ') || 'N/A'}</p>
+                          <p><strong>Employment Type:</strong> {app.employmentType}</p>
+                          <p><strong>Department:</strong> {app.department || 'Not specified'}</p>
+                          <p><strong>Applied:</strong> {new Date(app.appliedAt).toLocaleDateString()}</p>
+                        </div>
+                        {app.applicationNote && (
+                          <p className="mt-2 text-sm text-gray-600">
+                            <strong>Note:</strong> {app.applicationNote}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex space-x-3 ml-6">
+                        <button
+                          onClick={() => handleApprove(app.applicationId)}
+                          disabled={actionLoading === app.applicationId}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium"
+                        >
+                          {actionLoading === app.applicationId ? 'Processing...' : 'Approve'}
+                        </button>
+                        <button
+                          onClick={() => handleReject(app.applicationId)}
+                          disabled={actionLoading === app.applicationId}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-medium"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Emergency Access Tab */}
+        {activeTab === 'emergency' && (
+          <EmergencyAccessPage />
+        )}
       </div>
     </div>
   );

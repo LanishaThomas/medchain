@@ -7,6 +7,7 @@ import { authService, api } from '@/services/authService';
 import RequestAccessComponent from './request-access';
 import AppointmentManagementComponent from './appointments';
 import PatientRecordsViewer from './patient-records';
+import DoctorProfilePage from './profile';
 
 interface HospitalApplication {
   applicationId: string;
@@ -46,7 +47,7 @@ export default function DoctorDashboard() {
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [activeTab, setActiveTab] = useState<'applications' | 'appointments' | 'patient-records' | 'request-access'>('applications');
+  const [activeTab, setActiveTab] = useState<'applications' | 'appointments' | 'patient-records' | 'request-access' | 'profile'>('applications');
   const [selectedHospitalForDetails, setSelectedHospitalForDetails] = useState<HospitalApplication | null>(null);
   const [showHospitalModal, setShowHospitalModal] = useState(false);
 
@@ -230,6 +231,16 @@ export default function DoctorDashboard() {
               }`}
             >
               🔑 Request Patient Access
+            </button>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`px-4 py-3 font-medium border-b-2 transition ${
+                activeTab === 'profile'
+                  ? 'border-purple-600 text-purple-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              👤 Profile
             </button>
           </div>
         </div>
@@ -469,7 +480,13 @@ export default function DoctorDashboard() {
         {activeTab === 'request-access' && (
           <RequestAccessComponent />
         )}
-        {approvalData?.summary.canPractice && (
+
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <DoctorProfilePage />
+        )}
+
+        {approvalData?.summary.canPractice && activeTab === 'applications' && (
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

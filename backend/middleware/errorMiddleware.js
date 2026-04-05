@@ -28,6 +28,19 @@ const handleJWTExpiredError = () =>
   new AppError('Your token has expired. Please log in again.', 401);
 
 const sendErrorDev = (err, res) => {
+  // For validation errors, include detailed field errors
+  if (err.name === 'ValidationError') {
+    const errors = Object.values(err.errors).map(e => ({
+      field: e.path,
+      message: e.message
+    }));
+    return res.status(err.statusCode || 400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors
+    });
+  }
+  
   res.status(err.statusCode).json({
     success: false,
     error: err,

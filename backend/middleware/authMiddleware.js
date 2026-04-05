@@ -23,6 +23,12 @@ exports.protect = async (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    console.log('🔑 JWT Decoded:', {
+      decodedId: decoded.id,
+      decodedRole: decoded.role,
+      decodedEmail: decoded.email
+    });
 
     // Check if user still exists
     const user = await User.findById(decoded.id);
@@ -32,6 +38,13 @@ exports.protect = async (req, res, next) => {
         message: "User no longer exists." 
       });
     }
+
+    console.log('👤 User from DB:', {
+      userId: user._id,
+      email: user.email,
+      role: user.role,
+      isActive: user.isActive
+    });
 
     // Check if user is active
     if (!user.isActive) {
@@ -48,6 +61,13 @@ exports.protect = async (req, res, next) => {
       role: user.role,
       hospitalId: user.hospitalId
     };
+
+    console.log('✅ Token verified and user attached:', {
+      userId: user._id,
+      email: user.email,
+      role: user.role,
+      isActive: user.isActive
+    });
 
     next();
   } catch (error) {
