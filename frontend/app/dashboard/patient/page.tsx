@@ -10,27 +10,30 @@ import MentalHealthComponent from './mental-health';
 import MedicalRecordsComponent from './medical-records';
 import PatientProfilePage from './profile';
 import EmergencyQRPage from './emergency-qr';
+import PatientPrescriptionsComponent from './prescriptions';
 
 export default function PatientDashboard() {
   const router = useRouter();
   const { user, isLoading, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'records' | 'permissions' | 'mental-health' | 'profile' | 'emergency'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'prescriptions' | 'records' | 'permissions' | 'mental-health' | 'profile' | 'emergency'>('overview');
   
   // Dashboard states
   const [stats, setStats] = useState({
     appointments: 0,
     medicalRecords: 0,
-    doctorsWithAccess: 0
+    doctorsWithAccess: 0,
+    prescriptions: 0
   });
 
   const fetchStats = async () => {
     try {
       if (!user) return;
-      const [appointmentsRes, recordsRes, permissionsRes] = await Promise.all([
+      const [appointmentsRes, recordsRes, permissionsRes, prescriptionsRes] = await Promise.all([
         api.get('/appointments/my-appointments'),
         api.get('/medical-records/stats/summary'),
-        api.get('/permissions')
+        api.get('/permissions'),
+        api.get('/prescriptions/patient')
       ]);
 
       const upcomingAppointments = appointmentsRes.data?.data?.appointments?.filter((a: any) => 
@@ -44,7 +47,8 @@ export default function PatientDashboard() {
       setStats({
         appointments: upcomingAppointments,
         medicalRecords: recordsRes.data?.data?.totalRecords || 0,
-        doctorsWithAccess: activePermissions
+        doctorsWithAccess: activePermissions,
+        prescriptions: prescriptionsRes.data?.count || 0
       });
     } catch (error) {
       console.error('Failed to fetch dashboard stats:', error);
@@ -144,6 +148,16 @@ export default function PatientDashboard() {
               📅 Appointments
             </button>
             <button
+              onClick={() => setActiveTab('prescriptions')}
+              className={`px-4 py-3 font-medium border-b-2 transition ${
+                activeTab === 'prescriptions'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              💊 Prescriptions
+            </button>
+            <button
               onClick={() => setActiveTab('records')}
               className={`px-4 py-3 font-medium border-b-2 transition ${
                 activeTab === 'records'
@@ -200,7 +214,7 @@ export default function PatientDashboard() {
         {activeTab === 'overview' && (
         <>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Appointments</h2>
             <p className="text-3xl font-bold text-blue-600">{stats.appointments}</p>
@@ -214,6 +228,11 @@ export default function PatientDashboard() {
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Doctors</h2>
             <p className="text-3xl font-bold text-purple-600">{stats.doctorsWithAccess}</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Prescriptions</h2>
+            <p className="text-3xl font-bold text-indigo-600">{stats.prescriptions}</p>
           </div>
         </div>
 
@@ -232,7 +251,10 @@ export default function PatientDashboard() {
               <span className="text-2xl mb-2 block">📁</span>
               <span className="text-sm font-medium">My Records</span>
             </button>
-            <button className="p-4 border rounded-lg hover:bg-gray-50 text-center">
+            <button
+              onClick={() => setActiveTab('prescriptions')}
+              className="p-4 border rounded-lg hover:bg-gray-50 text-center"
+            >
               <span className="text-2xl mb-2 block">💊</span>
               <span className="text-sm font-medium">Prescriptions</span>
             </button>
@@ -282,6 +304,14 @@ export default function PatientDashboard() {
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-6">📁 Medical Records</h2>
             <MedicalRecordsComponent />
+          </div>
+        )}
+
+        {/* Prescriptions Tab */}
+        {activeTab === 'prescriptions' && (
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">💊 My Prescriptions</h2>
+            <PatientPrescriptionsComponent />
           </div>
         )}
 

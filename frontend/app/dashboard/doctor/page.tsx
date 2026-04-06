@@ -8,6 +8,7 @@ import RequestAccessComponent from './request-access';
 import AppointmentManagementComponent from './appointments';
 import PatientRecordsViewer from './patient-records';
 import DoctorProfilePage from './profile';
+import DoctorPrescriptionsComponent from './prescriptions';
 
 interface HospitalApplication {
   applicationId: string;
@@ -47,7 +48,7 @@ export default function DoctorDashboard() {
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [activeTab, setActiveTab] = useState<'applications' | 'appointments' | 'patient-records' | 'request-access' | 'profile'>('applications');
+  const [activeTab, setActiveTab] = useState<'applications' | 'appointments' | 'prescriptions' | 'patient-records' | 'request-access' | 'profile'>('applications');
   const [selectedHospitalForDetails, setSelectedHospitalForDetails] = useState<HospitalApplication | null>(null);
   const [showHospitalModal, setShowHospitalModal] = useState(false);
 
@@ -94,9 +95,10 @@ export default function DoctorDashboard() {
     const fetchDoctorStats = async () => {
       if (!user) return;
       try {
-        const [appointmentsRes, patientsRes] = await Promise.all([
+        const [appointmentsRes, patientsRes, prescriptionsRes] = await Promise.all([
           authService.client.get('/appointments/doctor'),
-          authService.client.get('/permissions/doctor/approved')
+          authService.client.get('/permissions/doctor/approved'),
+          authService.client.get('/prescriptions/doctor')
         ]);
         
         const appointments = appointmentsRes.data?.data?.appointments || [];
@@ -111,7 +113,7 @@ export default function DoctorDashboard() {
         setStats({
           appointments: todayAppointments.length,
           patients: activePatients,
-          prescriptions: 0 // to be implemented
+          prescriptions: prescriptionsRes.data?.count || 0
         });
       } catch (err) {
         console.error('Failed to fetch doctor stats:', err);
@@ -211,6 +213,16 @@ export default function DoctorDashboard() {
               }`}
             >
               📅 Appointments
+            </button>
+            <button
+              onClick={() => setActiveTab('prescriptions')}
+              className={`px-4 py-3 font-medium border-b-2 transition ${
+                activeTab === 'prescriptions'
+                  ? 'border-purple-600 text-purple-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              💊 Prescriptions
             </button>
             <button
               onClick={() => setActiveTab('patient-records')}
@@ -468,6 +480,14 @@ export default function DoctorDashboard() {
           </div>
         )}
 
+        {/* Prescriptions Tab */}
+        {activeTab === 'prescriptions' && (
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">💊 Prescriptions</h2>
+            <DoctorPrescriptionsComponent />
+          </div>
+        )}
+
         {/* Patient Records Tab */}
         {activeTab === 'patient-records' && (
           <div className="bg-white p-6 rounded-lg shadow">
@@ -497,7 +517,10 @@ export default function DoctorDashboard() {
                 <span className="text-2xl mb-2 block">📋</span>
                 <span className="text-sm font-medium">View Appointments</span>
               </button>
-              <button className="p-4 border rounded-lg hover:bg-gray-50 text-center">
+              <button
+                onClick={() => setActiveTab('prescriptions')}
+                className="p-4 border rounded-lg hover:bg-gray-50 text-center"
+              >
                 <span className="text-2xl mb-2 block">💊</span>
                 <span className="text-sm font-medium">Write Prescription</span>
               </button>

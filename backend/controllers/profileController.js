@@ -200,6 +200,63 @@ exports.getPatientEmergencyInfo = async (req, res) => {
 };
 
 /**
+ * Get Patient Profile Details for Doctor (with permission)
+ * GET /api/profile/patient/:patientId/details
+ */
+exports.getPatientProfileForDoctor = async (req, res) => {
+  try {
+    const doctorId = req.user.id;
+    const { patientId } = req.params;
+
+    const hasProfileAccess = await Permission.findOne({
+      patient: patientId,
+      doctor: doctorId,
+      status: 'approved',
+      expiryDate: { $gt: new Date() },
+      accessType: { $in: ['medical_records', 'full_access'] }
+    });
+
+    if (!hasProfileAccess) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have basic or full access to view this patient profile'
+      });
+    }
+
+    const patient = await User.findOne({ _id: patientId, role: 'patient' }).select(
+      'firstName lastName fullName email phone dateOfBirth gender patientProfile'
+    );
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: 'Patient not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        profile: {
+          id: patient._id,
+          firstName: patient.firstName,
+          lastName: patient.lastName,
+          fullName: patient.fullName,
+          email: patient.email,
+          phone: patient.phone,
+          dateOfBirth: patient.dateOfBirth,
+          gender: patient.gender,
+          patientProfile: patient.patientProfile
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get patient profile for doctor error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to get patient profile' });
+  }
+};
+
+/**
  * Get Doctor Profile (own or public)
  * GET /api/profile/doctor/:doctorId?
  */

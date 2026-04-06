@@ -18,6 +18,7 @@ const aiRoutes = require('./routes/aiRoutes');
 const medicalRecordRoutes = require('./routes/medicalRecordRoutes');
 const emergencyRoutes = require('./routes/emergencyRoutes');
 const profileRoutes = require('./routes/profileRoutes');
+const prescriptionRoutes = require('./routes/prescriptionRoutes');
 
 const app = express();
 
@@ -97,6 +98,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/medical-records', medicalRecordRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/prescriptions', prescriptionRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

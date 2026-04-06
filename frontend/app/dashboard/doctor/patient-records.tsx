@@ -27,6 +27,34 @@ interface Permission {
   accessCount: number;
 }
 
+interface PatientProfileDetails {
+  id: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  patientProfile?: {
+    bloodType?: string;
+    allergies?: Array<{ allergen: string; severity?: string; reaction?: string }>;
+    currentMedications?: Array<{ name: string; dosage?: string; frequency?: string; prescribedFor?: string }>;
+    previousSurgeries?: Array<{ name: string; date?: string; hospital?: string; notes?: string }>;
+    chronicConditions?: string[];
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+      country?: string;
+    };
+    emergencyContacts?: Array<{ name: string; relationship?: string; phone?: string }>;
+    insuranceProvider?: string;
+    insurancePolicyNumber?: string;
+  };
+}
+
 interface MedicalRecord {
   _id: string;
   title: string;
@@ -71,9 +99,11 @@ const RECORD_TYPES = [
 export default function PatientRecordsViewer() {
   const [approvedPatients, setApprovedPatients] = useState<Permission[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Permission | null>(null);
+  const [selectedPatientProfile, setSelectedPatientProfile] = useState<PatientProfileDetails | null>(null);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
   const [error, setError] = useState('');
   
   // Filters
@@ -95,7 +125,11 @@ export default function PatientRecordsViewer() {
       const response = await api.get('/permissions/doctor/approved');
       
       if (response.data.success) {
-        setApprovedPatients(response.data.data.permissions);
+        const profileAccessPermissions = (response.data.data.permissions || []).filter(
+          (permission: Permission) =>
+            permission.accessType === 'medical_records' || permission.accessType === 'full_access'
+        );
+        setApprovedPatients(profileAccessPermissions);
       }
     } catch (err: any) {
       console.error('Fetch approved patients error:', err);
@@ -133,6 +167,22 @@ export default function PatientRecordsViewer() {
     }
   };
 
+  const fetchPatientProfile = async (patientId: string) => {
+    try {
+      setLoadingProfile(true);
+      const response = await api.get(`/profile/patient/${patientId}/details`);
+      if (response.data.success) {
+        setSelectedPatientProfile(response.data.data.profile);
+      }
+    } catch (err: any) {
+      console.error('Fetch patient profile error:', err);
+      setError(err.response?.data?.message || 'Failed to fetch patient profile details');
+      setSelectedPatientProfile(null);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
   useEffect(() => {
     fetchApprovedPatients();
   }, []);
@@ -140,6 +190,7 @@ export default function PatientRecordsViewer() {
   useEffect(() => {
     if (selectedPatient) {
       fetchPatientRecords(selectedPatient.patient._id);
+      fetchPatientProfile(selectedPatient.patient._id);
     }
   }, [selectedPatient, page, filterType, startDate, endDate]);
 
@@ -233,7 +284,7 @@ export default function PatientRecordsViewer() {
                 <div
                   key={permission._id}
                   className="bg-white p-4 rounded-lg shadow hover:shadow-md transition cursor-pointer border-2 border-transparent hover:border-blue-500"
-                  onClick={() => { setSelectedPatient(permission); setPage(1); }}
+                  onClick={() => { setSelectedPatient(permission); setSelectedPatientProfile(null); setPage(1); }}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
@@ -252,6 +303,10 @@ export default function PatientRecordsViewer() {
                       Expires: {new Date(permission.expiryDate).toLocaleDateString()}
                     </span>
                     <span className="text-blue-600">View Records →</span>
+                  </div>
+
+                  <div className="mt-2 text-xs text-indigo-700">
+                    Access: {permission.accessType === 'full_access' ? 'Full Access' : 'Basic Access'}
                   </div>
                   
                   <div className="mt-2 flex gap-1">
@@ -272,7 +327,7 @@ export default function PatientRecordsViewer() {
           {/* Back Button & Patient Info */}
           <div className="flex items-center gap-4 mb-6">
             <button
-              onClick={() => { setSelectedPatient(null); setRecords([]); }}
+              onClick={() => { setSelectedPatient(null); setSelectedPatientProfile(null); setRecords([]); }}
               className="flex items-center gap-2 text-blue-600 hover:text-blue-800"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -289,6 +344,34 @@ export default function PatientRecordsViewer() {
                 Access expires: {new Date(selectedPatient.expiryDate).toLocaleDateString()}
               </p>
             </div>
+          </div>
+
+          {/* Patient Profile Details */}
+          <div className="bg-white p-4 rounded-lg shadow mb-4">
+            <h4 className="text-md font-semibold text-gray-900 mb-3">Patient Profile Details</h4>
+            {loadingProfile ? (
+              <p className="text-sm text-gray-500">Loading profile details...</p>
+            ) : !selectedPatientProfile ? (
+              <p className="text-sm text-gray-500">No profile details available.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p><span className="font-medium">Name:</span> {selectedPatientProfile.fullName}</p>
+                  <p><span className="font-medium">Email:</span> {selectedPatientProfile.email || 'N/A'}</p>
+                  <p><span className="font-medium">Phone:</span> {selectedPatientProfile.phone || 'N/A'}</p>
+                  <p><span className="font-medium">Gender:</span> {selectedPatientProfile.gender || 'N/A'}</p>
+                  <p><span className="font-medium">DOB:</span> {selectedPatientProfile.dateOfBirth ? new Date(selectedPatientProfile.dateOfBirth).toLocaleDateString() : 'N/A'}</p>
+                  <p><span className="font-medium">Blood Type:</span> {selectedPatientProfile.patientProfile?.bloodType || 'N/A'}</p>
+                </div>
+                <div>
+                  <p><span className="font-medium">Chronic Conditions:</span> {(selectedPatientProfile.patientProfile?.chronicConditions || []).join(', ') || 'N/A'}</p>
+                  <p><span className="font-medium">Allergies:</span> {(selectedPatientProfile.patientProfile?.allergies || []).map(a => a.allergen).join(', ') || 'N/A'}</p>
+                  <p><span className="font-medium">Current Medications:</span> {(selectedPatientProfile.patientProfile?.currentMedications || []).map(m => m.name).join(', ') || 'N/A'}</p>
+                  <p><span className="font-medium">Emergency Contacts:</span> {(selectedPatientProfile.patientProfile?.emergencyContacts || []).map(c => `${c.name}${c.phone ? ` (${c.phone})` : ''}`).join(', ') || 'N/A'}</p>
+                  <p><span className="font-medium">Insurance:</span> {selectedPatientProfile.patientProfile?.insuranceProvider || 'N/A'}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Filters */}

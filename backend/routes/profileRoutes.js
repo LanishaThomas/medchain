@@ -40,6 +40,13 @@ router.get(
   profileController.getPatientEmergencyInfo
 );
 
+router.get(
+  '/patient/:patientId/details',
+  protect,
+  authorize('doctor'),
+  profileController.getPatientProfileForDoctor
+);
+
 // Doctor profile routes
 router.get('/doctor', protect, authorize('doctor'), profileController.getDoctorProfile);
 router.get('/doctor/:doctorId', profileController.getDoctorProfile); // Public (optional auth)
