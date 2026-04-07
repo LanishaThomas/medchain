@@ -2,6 +2,60 @@ const Appointment = require('../models/Appointment');
 const User = require('../models/User');
 const Permission = require('../models/Permission');
 const DoctorHospitalMapping = require('../models/DoctorHospitalMapping');
+const {
+  executeWithBlockchainConsistency,
+  hashFromResult,
+  buildSnapshot,
+  restoreSnapshot
+} = require('../services/blockchainConsistencyService');
+
+async function syncAppointmentIntegrity({
+  appointment,
+  actorId,
+  actionType,
+  hashSource,
+  metadata = {},
+  previousSnapshot = null,
+  createMode = false
+}) {
+  await executeWithBlockchainConsistency(
+    async () => ({
+      entityType: 'APPOINTMENT',
+      entityId: appointment._id.toString(),
+      actorId: actorId.toString(),
+      actionType,
+      hashSource,
+      metadata,
+      dbState: {
+        model: 'Appointment',
+        operation: createMode ? 'CREATE' : 'UPDATE',
+        id: appointment._id.toString()
+      },
+      previousSnapshot,
+      createdId: appointment._id,
+      onSuccess: async (auditDoc) => {
+        await Appointment.updateOne(
+          { _id: appointment._id },
+          {
+            $set: {
+              blockchainHash: auditDoc.dataHash,
+              blockchainTxHash: auditDoc.blockchainTxHash,
+              blockchainTimestamp: auditDoc.timestamp
+            }
+          }
+        );
+      }
+    }),
+    async (operationResult) => {
+      if (createMode) {
+        await Appointment.findByIdAndDelete(operationResult.createdId);
+        return;
+      }
+      await restoreSnapshot(Appointment, operationResult.previousSnapshot);
+    },
+    hashFromResult
+  );
+}
 
 /**
  * @desc    Patient requests an appointment
@@ -113,6 +167,26 @@ const requestAppointment = async (req, res) => {
     console.log('💾 Saving appointment...');
     await appointment.save();
     console.log('✅ Appointment saved:', appointment._id);
+
+    await syncAppointmentIntegrity({
+      appointment,
+      actorId: patientId,
+      actionType: 'CREATE',
+      createMode: true,
+      hashSource: {
+        id: appointment._id.toString(),
+        appointmentNumber: appointment.appointmentNumber,
+        patient: appointment.patient.toString(),
+        doctor: appointment.doctor.toString(),
+        hospital: appointment.hospital ? appointment.hospital.toString() : null,
+        requestedDate: appointment.requestedDate,
+        requestedTime: appointment.requestedTime,
+        reason: appointment.reason,
+        status: appointment.status,
+        appointmentType: appointment.appointmentType,
+        priority: appointment.priority
+      }
+    });
 
     // Populate for response
     console.log('📦 Populating appointment data...');
@@ -477,6 +551,8 @@ const approveAppointment = async (req, res) => {
       });
     }
 
+    const previousSnapshot = buildSnapshot(appointment);
+
     // Update appointment
     appointment.status = 'approved';
     appointment.approvedDate = approvedDate ? new Date(approvedDate) : appointment.requestedDate;
@@ -486,6 +562,21 @@ const approveAppointment = async (req, res) => {
     appointment.respondedAt = new Date();
 
     await appointment.save();
+
+    await syncAppointmentIntegrity({
+      appointment,
+      actorId: doctorId,
+      actionType: 'APPROVE',
+      previousSnapshot,
+      hashSource: {
+        id: appointment._id.toString(),
+        appointmentNumber: appointment.appointmentNumber,
+        approvedDate: appointment.approvedDate,
+        approvedTime: appointment.approvedTime,
+        status: appointment.status,
+        doctorNotes: appointment.doctorNotes || ''
+      }
+    });
 
     // Populate for response
     await appointment.populate('patient', 'firstName lastName email phone');
@@ -555,12 +646,28 @@ const rejectAppointment = async (req, res) => {
       });
     }
 
+    const previousSnapshot = buildSnapshot(appointment);
+
     // Update appointment
     appointment.status = 'rejected';
     appointment.doctorResponse = reason;
     appointment.respondedAt = new Date();
 
     await appointment.save();
+
+    await syncAppointmentIntegrity({
+      appointment,
+      actorId: doctorId,
+      actionType: 'REJECT',
+      previousSnapshot,
+      hashSource: {
+        id: appointment._id.toString(),
+        appointmentNumber: appointment.appointmentNumber,
+        status: appointment.status,
+        reason: appointment.doctorResponse,
+        respondedAt: appointment.respondedAt
+      }
+    });
 
     res.json({
       success: true,
@@ -625,6 +732,8 @@ const rescheduleAppointment = async (req, res) => {
       });
     }
 
+    const previousSnapshot = buildSnapshot(appointment);
+
     // Check for conflicts at new time
     const propDate = new Date(proposedDate);
     const conflict = await Appointment.findOne({
@@ -664,6 +773,21 @@ const rescheduleAppointment = async (req, res) => {
     appointment.respondedAt = new Date();
 
     await appointment.save();
+
+    await syncAppointmentIntegrity({
+      appointment,
+      actorId: doctorId,
+      actionType: 'UPDATE',
+      previousSnapshot,
+      metadata: { event: 'RESCHEDULE' },
+      hashSource: {
+        id: appointment._id.toString(),
+        status: appointment.status,
+        proposedDate: appointment.proposedDate,
+        proposedTime: appointment.proposedTime,
+        message: appointment.doctorResponse
+      }
+    });
 
     await appointment.populate('patient', 'firstName lastName');
 
@@ -726,6 +850,8 @@ const acceptReschedule = async (req, res) => {
       });
     }
 
+    const previousSnapshot = buildSnapshot(appointment);
+
     // Accept the reschedule
     appointment.status = 'approved';
     appointment.approvedDate = appointment.proposedDate;
@@ -733,6 +859,21 @@ const acceptReschedule = async (req, res) => {
     appointment.patientAcceptedReschedule = true;
 
     await appointment.save();
+
+    await syncAppointmentIntegrity({
+      appointment,
+      actorId: patientId,
+      actionType: 'UPDATE',
+      previousSnapshot,
+      metadata: { event: 'RESCHEDULE_ACCEPTED' },
+      hashSource: {
+        id: appointment._id.toString(),
+        status: appointment.status,
+        approvedDate: appointment.approvedDate,
+        approvedTime: appointment.approvedTime,
+        patientAcceptedReschedule: appointment.patientAcceptedReschedule
+      }
+    });
 
     await appointment.populate('doctor', 'firstName lastName');
 
@@ -793,6 +934,8 @@ const declineReschedule = async (req, res) => {
       });
     }
 
+    const previousSnapshot = buildSnapshot(appointment);
+
     // Cancel the appointment
     appointment.status = 'cancelled';
     appointment.cancelledBy = 'patient';
@@ -801,6 +944,20 @@ const declineReschedule = async (req, res) => {
     appointment.patientAcceptedReschedule = false;
 
     await appointment.save();
+
+    await syncAppointmentIntegrity({
+      appointment,
+      actorId: patientId,
+      actionType: 'REJECT',
+      previousSnapshot,
+      metadata: { event: 'RESCHEDULE_DECLINED' },
+      hashSource: {
+        id: appointment._id.toString(),
+        status: appointment.status,
+        cancellationReason: appointment.cancellationReason,
+        cancelledAt: appointment.cancelledAt
+      }
+    });
 
     res.json({
       success: true,
@@ -861,6 +1018,8 @@ const cancelAppointment = async (req, res) => {
       });
     }
 
+    const previousSnapshot = buildSnapshot(appointment);
+
     // Cancel
     appointment.status = 'cancelled';
     appointment.cancelledBy = userRole;
@@ -868,6 +1027,21 @@ const cancelAppointment = async (req, res) => {
     appointment.cancelledAt = new Date();
 
     await appointment.save();
+
+    await syncAppointmentIntegrity({
+      appointment,
+      actorId: userId,
+      actionType: 'UPDATE',
+      previousSnapshot,
+      metadata: { event: 'CANCEL' },
+      hashSource: {
+        id: appointment._id.toString(),
+        status: appointment.status,
+        cancelledBy: appointment.cancelledBy,
+        cancellationReason: appointment.cancellationReason,
+        cancelledAt: appointment.cancelledAt
+      }
+    });
 
     res.json({
       success: true,
@@ -925,12 +1099,28 @@ const completeAppointment = async (req, res) => {
       });
     }
 
+    const previousSnapshot = buildSnapshot(appointment);
+
     // Complete
     appointment.status = 'completed';
     appointment.doctorNotes = notes || appointment.doctorNotes;
     appointment.completedAt = new Date();
 
     await appointment.save();
+
+    await syncAppointmentIntegrity({
+      appointment,
+      actorId: doctorId,
+      actionType: 'UPDATE',
+      previousSnapshot,
+      metadata: { event: 'COMPLETE' },
+      hashSource: {
+        id: appointment._id.toString(),
+        status: appointment.status,
+        doctorNotes: appointment.doctorNotes,
+        completedAt: appointment.completedAt
+      }
+    });
 
     res.json({
       success: true,
@@ -987,9 +1177,23 @@ const markNoShow = async (req, res) => {
       });
     }
 
+    const previousSnapshot = buildSnapshot(appointment);
+
     // Mark no-show
     appointment.status = 'no_show';
     await appointment.save();
+
+    await syncAppointmentIntegrity({
+      appointment,
+      actorId: doctorId,
+      actionType: 'UPDATE',
+      previousSnapshot,
+      metadata: { event: 'NO_SHOW' },
+      hashSource: {
+        id: appointment._id.toString(),
+        status: appointment.status
+      }
+    });
 
     res.json({
       success: true,

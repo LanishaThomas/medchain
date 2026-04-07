@@ -392,6 +392,32 @@ class AuthService {
   async getHospitals() {
     return this.client.get('/auth/hospitals');
   }
+
+  async getBlockchainLogs(params?: {
+    entityType?: string;
+    actionType?: string;
+    actorId?: string;
+    entityId?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.client.get('/blockchain/logs', {
+      headers: this.getAuthHeader(),
+      params
+    });
+  }
+
+  async verifyIntegrity(entityType: string, entityId: string) {
+    return this.client.get(`/blockchain/verify/${entityType}/${entityId}`, {
+      headers: this.getAuthHeader()
+    });
+  }
+
+  async verifyHistory(entityId: string) {
+    return this.client.get(`/blockchain/verify-history/${entityId}`, {
+      headers: this.getAuthHeader()
+    });
+  }
 }
 
 export const authService = new AuthService();

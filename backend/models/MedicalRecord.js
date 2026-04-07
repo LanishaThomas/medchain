@@ -100,6 +100,17 @@ const medicalRecordSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+
+  blockchainTxHash: {
+    type: String,
+    default: null,
+    index: true
+  },
+
+  blockchainTimestamp: {
+    type: Date,
+    default: null
+  },
   
   // File integrity
   fileHash: {

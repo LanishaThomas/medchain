@@ -151,7 +151,21 @@ const appointmentSchema = new mongoose.Schema({
       enum: ['email', 'sms', 'push']
     },
     sentAt: Date
-  }]
+  }],
+
+  blockchainHash: {
+    type: String,
+    default: null
+  },
+  blockchainTxHash: {
+    type: String,
+    default: null,
+    index: true
+  },
+  blockchainTimestamp: {
+    type: Date,
+    default: null
+  }
 }, {
   timestamps: true
 });

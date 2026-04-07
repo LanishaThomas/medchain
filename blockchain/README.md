@@ -1,57 +1,43 @@
-# Sample Hardhat 3 Beta Project (`mocha` and `ethers`)
+# MedChain Polygon Audit Contract
 
-This project showcases a Hardhat 3 Beta project using `mocha` for tests and the `ethers` library for Ethereum interactions.
+This package deploys the immutable MedChain audit contract used by the backend.
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+## Contract
 
-## Project Overview
+- `contracts/MedChainAudit.sol`
+- Stores deterministic data hashes and metadata for critical healthcare events.
+- Append-only log retrieval is available via:
+	- `getLogsByEntity(entityId)`
+	- `getAllLogs()`
 
-This example project includes:
+## Prerequisites
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using `mocha` and ethers.js
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+1. Fund a wallet on Polygon Amoy testnet.
+2. Set environment variables in `blockchain/.env`:
 
-## Usage
-
-### Running Tests
-
-To run all the tests in the project, execute the following command:
-
-```shell
-npx hardhat test
+```bash
+RPC_URL=https://rpc-amoy.polygon.technology
+PRIVATE_KEY=0xYOUR_PRIVATE_KEY
 ```
 
-You can also selectively run the Solidity or `mocha` tests:
+## Deploy To Polygon Amoy
 
-```shell
-npx hardhat test solidity
-npx hardhat test mocha
+```bash
+npm install
+npx hardhat ignition deploy --network amoy ignition/modules/MedChainAudit.ts
 ```
 
-### Make a deployment to Sepolia
+After deployment, copy contract address and set in backend env:
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
-
-To run the deployment to a local chain:
-
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
+```bash
+BLOCKCHAIN_CONTRACT_ADDRESS=0xDeployedContractAddress
+BLOCKCHAIN_RPC_URL=https://rpc-amoy.polygon.technology
+BLOCKCHAIN_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
 ```
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
+## Verification
 
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
+After backend is running, hit any critical endpoint (for example appointment request or permission approval), then inspect:
 
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
-
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
-```
-
-After setting the variable, you can run the deployment with the Sepolia network:
-
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
-```
+1. `backend` Mongo collection `blockchainauditlogs`
+2. PolygonScan Amoy transaction hash from `blockchainTxHash`

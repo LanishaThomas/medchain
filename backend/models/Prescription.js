@@ -17,6 +17,9 @@ const prescriptionSchema = new mongoose.Schema(
     dosage: { type: String, default: '', trim: true },
     notes: { type: String, default: '', trim: true },
     hash: { type: String, required: true, index: true },
+    blockchainHash: { type: String, default: null },
+    blockchainTxHash: { type: String, default: null, index: true },
+    blockchainTimestamp: { type: Date, default: null },
 
     // Legacy compatibility fields
     patient: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

@@ -6,6 +6,7 @@ module.exports = {
   Permission: require('./Permission'),
   Prescription: require('./Prescription'),
   Appointment: require('./Appointment'),
+  VersionHistory: require('./VersionHistory'),
   EmergencyAccessLog: require('./EmergencyAccessLog'),
   Notification: require('./Notification'),
   MoodEntry: require('./MoodEntry')

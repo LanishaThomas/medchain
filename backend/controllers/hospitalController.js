@@ -2,6 +2,8 @@ const Hospital = require('../models/Hospital');
 const User = require('../models/User');
 const DoctorHospitalMapping = require('../models/DoctorHospitalMapping');
 const Notification = require('../models/Notification');
+const { writeAuditLog } = require('../services/blockchainAuditService');
+const { getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
 // ============================================
 // DOCTOR APPROVAL MANAGEMENT
@@ -28,29 +30,36 @@ exports.getPendingApplications = async (req, res, next) => {
     // Get pending applications
     const applications = await DoctorHospitalMapping.getPendingApplications(hospital._id);
 
+    const mappedApplications = await Promise.all(applications.map(async (app) => ({
+      applicationId: app._id,
+      doctor: {
+        id: app.doctor._id,
+        fullName: `${app.doctor.firstName} ${app.doctor.lastName}`,
+        email: app.doctor.email,
+        phone: app.doctor.phone,
+        profileImage: app.doctor.profileImage,
+        licenseNumber: app.doctor.doctorProfile?.licenseNumber,
+        specializations: app.doctor.doctorProfile?.specializations,
+        yearsOfExperience: app.doctor.doctorProfile?.yearsOfExperience
+      },
+      applicationNote: app.applicationNote,
+      employmentType: app.employmentType,
+      department: app.department,
+      appliedAt: app.appliedAt,
+      verificationStatus: await getVerificationStatusForEntity({
+        entityType: 'DOCTOR_REGISTRY',
+        entityId: app._id,
+        dbHash: app.blockchainHash
+      })
+    })));
+
     res.status(200).json({
       success: true,
       data: {
         hospitalId: hospital._id,
         hospitalName: hospital.name,
         count: applications.length,
-        applications: applications.map(app => ({
-          applicationId: app._id,
-          doctor: {
-            id: app.doctor._id,
-            fullName: `${app.doctor.firstName} ${app.doctor.lastName}`,
-            email: app.doctor.email,
-            phone: app.doctor.phone,
-            profileImage: app.doctor.profileImage,
-            licenseNumber: app.doctor.doctorProfile?.licenseNumber,
-            specializations: app.doctor.doctorProfile?.specializations,
-            yearsOfExperience: app.doctor.doctorProfile?.yearsOfExperience
-          },
-          applicationNote: app.applicationNote,
-          employmentType: app.employmentType,
-          department: app.department,
-          appliedAt: app.appliedAt
-        }))
+        applications: mappedApplications
       }
     });
   } catch (error) {
@@ -91,6 +100,34 @@ exports.getAllApplications = async (req, res, next) => {
 
     const total = await DoctorHospitalMapping.countDocuments(query);
 
+    const mappedApplications = await Promise.all(applications.map(async (app) => ({
+      applicationId: app._id,
+      doctor: {
+        id: app.doctor._id,
+        fullName: `${app.doctor.firstName} ${app.doctor.lastName}`,
+        email: app.doctor.email,
+        phone: app.doctor.phone,
+        profileImage: app.doctor.profileImage,
+        licenseNumber: app.doctor.doctorProfile?.licenseNumber,
+        specializations: app.doctor.doctorProfile?.specializations
+      },
+      status: app.status,
+      applicationNote: app.applicationNote,
+      employmentType: app.employmentType,
+      department: app.department,
+      reviewedBy: app.reviewedBy ? `${app.reviewedBy.firstName} ${app.reviewedBy.lastName}` : null,
+      reviewedAt: app.reviewedAt,
+      reviewNotes: app.reviewNotes,
+      rejectionReason: app.rejectionReason,
+      appliedAt: app.appliedAt,
+      joiningDate: app.joiningDate,
+      verificationStatus: await getVerificationStatusForEntity({
+        entityType: 'DOCTOR_REGISTRY',
+        entityId: app._id,
+        dbHash: app.blockchainHash
+      })
+    })));
+
     res.status(200).json({
       success: true,
       data: {
@@ -102,28 +139,7 @@ exports.getAllApplications = async (req, res, next) => {
           total,
           pages: Math.ceil(total / limit)
         },
-        applications: applications.map(app => ({
-          applicationId: app._id,
-          doctor: {
-            id: app.doctor._id,
-            fullName: `${app.doctor.firstName} ${app.doctor.lastName}`,
-            email: app.doctor.email,
-            phone: app.doctor.phone,
-            profileImage: app.doctor.profileImage,
-            licenseNumber: app.doctor.doctorProfile?.licenseNumber,
-            specializations: app.doctor.doctorProfile?.specializations
-          },
-          status: app.status,
-          applicationNote: app.applicationNote,
-          employmentType: app.employmentType,
-          department: app.department,
-          reviewedBy: app.reviewedBy ? `${app.reviewedBy.firstName} ${app.reviewedBy.lastName}` : null,
-          reviewedAt: app.reviewedAt,
-          reviewNotes: app.reviewNotes,
-          rejectionReason: app.rejectionReason,
-          appliedAt: app.appliedAt,
-          joiningDate: app.joiningDate
-        }))
+        applications: mappedApplications
       }
     });
   } catch (error) {
@@ -193,6 +209,23 @@ exports.approveDoctor = async (req, res, next) => {
       }
     });
 
+    await writeAuditLog({
+      entityType: 'DOCTOR_REGISTRY',
+      entityId: application._id.toString(),
+      actorId: adminId.toString(),
+      actionType: 'APPROVE',
+      data: {
+        mappingId: application._id.toString(),
+        doctorId: application.doctor._id.toString(),
+        hospitalId: application.hospital._id.toString(),
+        status: application.status,
+        department: application.department,
+        joiningDate: application.joiningDate,
+        reviewedAt: application.reviewedAt,
+        notes: notes || ''
+      }
+    });
+
     res.status(200).json({
       success: true,
       message: 'Doctor application approved successfully',
@@ -205,7 +238,12 @@ exports.approveDoctor = async (req, res, next) => {
         },
         status: application.status,
         joiningDate: application.joiningDate,
-        reviewedAt: application.reviewedAt
+        reviewedAt: application.reviewedAt,
+        verificationStatus: await getVerificationStatusForEntity({
+          entityType: 'DOCTOR_REGISTRY',
+          entityId: application._id,
+          dbHash: application.blockchainHash
+        })
       }
     });
   } catch (error) {
@@ -277,6 +315,21 @@ exports.rejectDoctor = async (req, res, next) => {
       }
     });
 
+    await writeAuditLog({
+      entityType: 'DOCTOR_REGISTRY',
+      entityId: application._id.toString(),
+      actorId: adminId.toString(),
+      actionType: 'REJECT',
+      data: {
+        mappingId: application._id.toString(),
+        doctorId: application.doctor._id.toString(),
+        hospitalId: application.hospital._id.toString(),
+        status: application.status,
+        reason,
+        reviewedAt: application.reviewedAt
+      }
+    });
+
     res.status(200).json({
       success: true,
       message: 'Doctor application rejected',
@@ -287,7 +340,12 @@ exports.rejectDoctor = async (req, res, next) => {
           fullName: `${application.doctor.firstName} ${application.doctor.lastName}`
         },
         status: application.status,
-        rejectionReason: reason
+        rejectionReason: reason,
+        verificationStatus: await getVerificationStatusForEntity({
+          entityType: 'DOCTOR_REGISTRY',
+          entityId: application._id,
+          dbHash: application.blockchainHash
+        })
       }
     });
   } catch (error) {
@@ -611,6 +669,26 @@ exports.updateHospitalProfile = async (req, res, next) => {
     // Update
     Object.assign(hospital, updateFields);
     await hospital.save();
+
+    await writeAuditLog({
+      entityType: 'HOSPITAL_PROFILE',
+      entityId: hospital._id.toString(),
+      actorId: adminId.toString(),
+      actionType: 'UPDATE',
+      data: {
+        id: hospital._id.toString(),
+        name: hospital.name,
+        type: hospital.type,
+        description: hospital.description,
+        email: hospital.email,
+        phone: hospital.phone,
+        emergencyPhone: hospital.emergencyPhone,
+        website: hospital.website,
+        address: hospital.address,
+        settings: hospital.settings,
+        specialties: hospital.specialties || []
+      }
+    });
 
     res.status(200).json({
       success: true,

@@ -5,6 +5,14 @@ const MedicalRecord = require('../models/MedicalRecord');
 const Permission = require('../models/Permission');
 const { protect } = require('../middleware/authMiddleware');
 const { upload, uploadToCloudinary, deleteFile, deleteLocalFile, UPLOADS_DIR } = require('../utils/cloudinary');
+const { writeAuditLog } = require('../services/blockchainAuditService');
+const {
+  executeWithBlockchainConsistency,
+  hashFromResult,
+  buildSnapshot,
+  restoreSnapshot
+} = require('../services/blockchainConsistencyService');
+const { attachVerificationStatus, getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
 // Helper: Determine file type from mimetype
 const getFileType = (mimetype) => {
@@ -132,6 +140,65 @@ router.post('/upload', protect, (req, res, next) => {
     });
 
     await medicalRecord.save();
+
+    await executeWithBlockchainConsistency(
+      async () => ({
+        entityType: 'MEDICAL_RECORD',
+        entityId: medicalRecord._id.toString(),
+        actorId: req.user.id.toString(),
+        actionType: 'CREATE',
+        hashSource: {
+          id: medicalRecord._id.toString(),
+          patient: medicalRecord.patient.toString(),
+          uploadedBy: medicalRecord.uploadedBy.toString(),
+          hospital: medicalRecord.hospital ? medicalRecord.hospital.toString() : null,
+          title: medicalRecord.title,
+          description: medicalRecord.description,
+          fileHash: medicalRecord.fileHash,
+          fileName: medicalRecord.fileName,
+          fileSize: medicalRecord.fileSize,
+          fileType: medicalRecord.fileType,
+          mimeType: medicalRecord.mimeType,
+          recordType: medicalRecord.recordType,
+          clinicalData: medicalRecord.clinicalData,
+          tags: medicalRecord.tags || [],
+          status: medicalRecord.status
+        },
+        metadata: {
+          storageMode: medicalRecord.storageMode
+        },
+        versioning: {
+          beforeSnapshot: null,
+          afterSnapshot: buildSnapshot(medicalRecord),
+          metadata: {
+            storageMode: medicalRecord.storageMode
+          }
+        },
+        dbState: {
+          model: 'MedicalRecord',
+          operation: 'CREATE',
+          id: medicalRecord._id.toString()
+        },
+        createdId: medicalRecord._id,
+        onSuccess: async (auditDoc) => {
+          await MedicalRecord.updateOne(
+            { _id: medicalRecord._id },
+            {
+              $set: {
+                blockchainHash: auditDoc.dataHash,
+                blockchainTxHash: auditDoc.blockchainTxHash,
+                blockchainTimestamp: auditDoc.timestamp
+              }
+            }
+          );
+        }
+      }),
+      async (operationResult) => {
+        await MedicalRecord.findByIdAndDelete(operationResult.createdId);
+      },
+      hashFromResult
+    );
+
     await medicalRecord.populate([
       { path: 'uploadedBy', select: 'firstName lastName role' },
       { path: 'hospital', select: 'name' }
@@ -142,7 +209,16 @@ router.post('/upload', protect, (req, res, next) => {
     res.status(201).json({
       success: true,
       message: 'Medical record uploaded successfully',
-      data: { record: medicalRecord }
+      data: {
+        record: {
+          ...medicalRecord.toObject(),
+          verificationStatus: await getVerificationStatusForEntity({
+            entityType: 'MEDICAL_RECORD',
+            entityId: medicalRecord._id,
+            dbHash: medicalRecord.blockchainHash
+          })
+        }
+      }
     });
 
   } catch (error) {
@@ -195,10 +271,19 @@ router.get('/my-records', protect, async (req, res) => {
       MedicalRecord.countDocuments(filter)
     ]);
 
+    const recordsWithVerification = await attachVerificationStatus(
+      records.map((record) => ({ ...record.toObject() })),
+      {
+        entityType: 'MEDICAL_RECORD',
+        getId: (item) => item._id,
+        getHash: (item) => item.blockchainHash
+      }
+    );
+
     res.json({
       success: true,
       data: {
-        records,
+        records: recordsWithVerification,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -254,6 +339,7 @@ router.get('/patient/:patientId', protect, async (req, res) => {
       if (permission) {
         await permission.recordAccess();
       }
+
     } else {
       return res.status(403).json({
         success: false,
@@ -286,10 +372,38 @@ router.get('/patient/:patientId', protect, async (req, res) => {
       MedicalRecord.countDocuments(filter)
     ]);
 
+    if (req.user.role === 'doctor') {
+      await writeAuditLog({
+        entityType: 'ACCESS_EVENT',
+        entityId: patientId.toString(),
+        actorId: req.user.id.toString(),
+        actionType: 'ACCESS',
+        data: {
+          patientId: patientId.toString(),
+          doctorId: req.user.id.toString(),
+          accessedAt: new Date().toISOString(),
+          purpose: 'medical_records',
+          recordCount: records.length
+        },
+        metadata: {
+          endpoint: '/api/medical-records/patient/:patientId'
+        }
+      });
+    }
+
+    const recordsWithVerification = await attachVerificationStatus(
+      records.map((record) => ({ ...record.toObject() })),
+      {
+        entityType: 'MEDICAL_RECORD',
+        getId: (item) => item._id,
+        getHash: (item) => item.blockchainHash
+      }
+    );
+
     res.json({
       success: true,
       data: {
-        records,
+        records: recordsWithVerification,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -340,9 +454,37 @@ router.get('/:recordId', protect, async (req, res) => {
     // Log access
     await record.logAccess(req.user.id, 'view', req.ip);
 
+    if (req.user.role === 'doctor') {
+      await writeAuditLog({
+        entityType: 'ACCESS_EVENT',
+        entityId: record.patient.toString(),
+        actorId: req.user.id.toString(),
+        actionType: 'ACCESS',
+        data: {
+          patientId: record.patient.toString(),
+          doctorId: req.user.id.toString(),
+          recordId: record._id.toString(),
+          accessedAt: new Date().toISOString(),
+          purpose: 'medical_record_view'
+        },
+        metadata: {
+          endpoint: '/api/medical-records/:recordId'
+        }
+      });
+    }
+
     res.json({
       success: true,
-      data: { record }
+      data: {
+        record: {
+          ...record.toObject(),
+          verificationStatus: await getVerificationStatusForEntity({
+            entityType: 'MEDICAL_RECORD',
+            entityId: record._id,
+            dbHash: record.blockchainHash
+          })
+        }
+      }
     });
 
   } catch (error) {
@@ -399,6 +541,25 @@ router.get('/:recordId/download', protect, async (req, res) => {
     // Log download access
     await record.logAccess(req.user.id, 'download', req.ip);
 
+    if (req.user.role === 'doctor') {
+      await writeAuditLog({
+        entityType: 'ACCESS_EVENT',
+        entityId: record.patient.toString(),
+        actorId: req.user.id.toString(),
+        actionType: 'ACCESS',
+        data: {
+          patientId: record.patient.toString(),
+          doctorId: req.user.id.toString(),
+          recordId: record._id.toString(),
+          accessedAt: new Date().toISOString(),
+          purpose: 'medical_record_download'
+        },
+        metadata: {
+          endpoint: '/api/medical-records/:recordId/download'
+        }
+      });
+    }
+
     // Return the file URL for download
     res.json({
       success: true,
@@ -445,6 +606,8 @@ router.patch('/:recordId', protect, async (req, res) => {
     }
 
     // Update allowed fields
+    const previousSnapshot = buildSnapshot(record);
+
     if (title) record.title = title.trim();
     if (description !== undefined) record.description = description.trim();
     if (recordType) record.recordType = recordType;
@@ -459,10 +622,68 @@ router.patch('/:recordId', protect, async (req, res) => {
 
     await record.save();
 
+    await executeWithBlockchainConsistency(
+      async () => ({
+        entityType: 'MEDICAL_RECORD',
+        entityId: record._id.toString(),
+        actorId: req.user.id.toString(),
+        actionType: 'UPDATE',
+        hashSource: {
+          id: record._id.toString(),
+          patient: record.patient.toString(),
+          title: record.title,
+          description: record.description,
+          recordType: record.recordType,
+          tags: record.tags,
+          clinicalData: record.clinicalData,
+          status: record.status,
+          fileHash: record.fileHash
+        },
+        dbState: {
+          model: 'MedicalRecord',
+          operation: 'UPDATE',
+          id: record._id.toString()
+        },
+        versioning: {
+          beforeSnapshot: previousSnapshot,
+          afterSnapshot: buildSnapshot(record),
+          metadata: {
+            source: 'record_update'
+          }
+        },
+        previousSnapshot,
+        onSuccess: async (auditDoc) => {
+          await MedicalRecord.updateOne(
+            { _id: record._id },
+            {
+              $set: {
+                blockchainHash: auditDoc.dataHash,
+                blockchainTxHash: auditDoc.blockchainTxHash,
+                blockchainTimestamp: auditDoc.timestamp
+              }
+            }
+          );
+        }
+      }),
+      async (operationResult) => {
+        await restoreSnapshot(MedicalRecord, operationResult.previousSnapshot);
+      },
+      hashFromResult
+    );
+
     res.json({
       success: true,
       message: 'Record updated successfully',
-      data: { record }
+      data: {
+        record: {
+          ...record.toObject(),
+          verificationStatus: await getVerificationStatusForEntity({
+            entityType: 'MEDICAL_RECORD',
+            entityId: record._id,
+            dbHash: record.blockchainHash
+          })
+        }
+      }
     });
 
   } catch (error) {
@@ -500,8 +721,56 @@ router.delete('/:recordId', protect, async (req, res) => {
     }
 
     // Soft delete
+    const previousSnapshot = buildSnapshot(record);
+
     record.status = 'deleted';
     await record.save();
+
+    await executeWithBlockchainConsistency(
+      async () => ({
+        entityType: 'MEDICAL_RECORD',
+        entityId: record._id.toString(),
+        actorId: req.user.id.toString(),
+        actionType: 'UPDATE',
+        hashSource: {
+          id: record._id.toString(),
+          patient: record.patient.toString(),
+          status: record.status
+        },
+        metadata: {
+          event: 'SOFT_DELETE'
+        },
+        dbState: {
+          model: 'MedicalRecord',
+          operation: 'UPDATE',
+          id: record._id.toString()
+        },
+        versioning: {
+          beforeSnapshot: previousSnapshot,
+          afterSnapshot: buildSnapshot(record),
+          metadata: {
+            source: 'record_soft_delete'
+          }
+        },
+        previousSnapshot,
+        onSuccess: async (auditDoc) => {
+          await MedicalRecord.updateOne(
+            { _id: record._id },
+            {
+              $set: {
+                blockchainHash: auditDoc.dataHash,
+                blockchainTxHash: auditDoc.blockchainTxHash,
+                blockchainTimestamp: auditDoc.timestamp
+              }
+            }
+          );
+        }
+      }),
+      async (operationResult) => {
+        await restoreSnapshot(MedicalRecord, operationResult.previousSnapshot);
+      },
+      hashFromResult
+    );
 
     res.json({
       success: true,
@@ -542,6 +811,8 @@ router.delete('/:recordId/permanent', protect, async (req, res) => {
       });
     }
 
+    const previousSnapshot = buildSnapshot(record);
+
     // Delete from Cloudinary
     try {
       const resourceType = record.fileType === 'image' ? 'image' : 'raw';
@@ -553,6 +824,40 @@ router.delete('/:recordId/permanent', protect, async (req, res) => {
 
     // Delete from database
     await MedicalRecord.findByIdAndDelete(recordId);
+
+    await executeWithBlockchainConsistency(
+      async () => ({
+        entityType: 'MEDICAL_RECORD',
+        entityId: record._id.toString(),
+        actorId: req.user.id.toString(),
+        actionType: 'UPDATE',
+        hashSource: {
+          id: record._id.toString(),
+          patient: record.patient.toString(),
+          status: 'permanently_deleted'
+        },
+        metadata: {
+          event: 'HARD_DELETE'
+        },
+        dbState: {
+          model: 'MedicalRecord',
+          operation: 'DELETE',
+          id: record._id.toString()
+        },
+        versioning: {
+          beforeSnapshot: previousSnapshot,
+          afterSnapshot: null,
+          metadata: {
+            source: 'record_hard_delete'
+          }
+        },
+        previousSnapshot
+      }),
+      async (operationResult) => {
+        await restoreSnapshot(MedicalRecord, operationResult.previousSnapshot);
+      },
+      hashFromResult
+    );
 
     res.json({
       success: true,

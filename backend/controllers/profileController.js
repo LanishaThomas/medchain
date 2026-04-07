@@ -6,6 +6,14 @@
 const User = require('../models/User');
 const Permission = require('../models/Permission');
 const crypto = require('crypto');
+const { writeAuditLog } = require('../services/blockchainAuditService');
+const {
+  executeWithBlockchainConsistency,
+  hashFromResult,
+  buildSnapshot,
+  restoreSnapshot
+} = require('../services/blockchainConsistencyService');
+const { getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
 /**
  * Get Patient Profile (own profile)
@@ -40,12 +48,18 @@ exports.getPatientProfile = async (req, res) => {
     
     // Calculate profile completion
     const completionStatus = calculateProfileCompletion(patient);
+    const verificationStatus = await getVerificationStatusForEntity({
+      entityType: 'USER_PROFILE',
+      entityId: patient._id,
+      dbHash: patient.blockchainHash
+    });
     
     res.status(200).json({
       success: true,
       data: {
         profile: {
           id: patient._id,
+          updatedAt: patient.updatedAt,
           email: patient.email,
           phone: patient.phone,
           firstName: patient.firstName,
@@ -54,7 +68,8 @@ exports.getPatientProfile = async (req, res) => {
           profileImage: patient.profileImage,
           dateOfBirth: patient.dateOfBirth,
           gender: patient.gender,
-          patientProfile: patient.patientProfile
+          patientProfile: patient.patientProfile,
+          verificationStatus
         },
         completionStatus
       }
@@ -111,11 +126,87 @@ exports.updatePatientProfile = async (req, res) => {
     if (insuranceProvider !== undefined) updateData['patientProfile.insuranceProvider'] = insuranceProvider;
     if (insurancePolicyNumber !== undefined) updateData['patientProfile.insurancePolicyNumber'] = insurancePolicyNumber;
     
-    const patient = await User.findByIdAndUpdate(
-      patientId,
-      { $set: updateData },
-      { new: true, runValidators: true }
+    const consistencyResult = await executeWithBlockchainConsistency(
+      async () => {
+        const previous = await User.findById(patientId);
+        const previousSnapshot = buildSnapshot(previous);
+
+        const patient = await User.findByIdAndUpdate(
+          patientId,
+          { $set: updateData },
+          { returnDocument: 'after', runValidators: true }
+        );
+
+        const nextSnapshot = buildSnapshot(patient);
+
+        return {
+          entityType: 'USER_PROFILE',
+          entityId: patient._id.toString(),
+          actorId: patientId.toString(),
+          actionType: 'UPDATE',
+          hashSource: {
+            id: patient._id.toString(),
+            role: patient.role,
+            firstName: patient.firstName,
+            lastName: patient.lastName,
+            email: patient.email,
+            phone: patient.phone,
+            dateOfBirth: patient.dateOfBirth,
+            gender: patient.gender,
+            patientProfile: {
+              bloodType: patient.patientProfile?.bloodType,
+              allergies: patient.patientProfile?.allergies || [],
+              currentMedications: patient.patientProfile?.currentMedications || [],
+              previousSurgeries: patient.patientProfile?.previousSurgeries || [],
+              chronicConditions: patient.patientProfile?.chronicConditions || [],
+              address: patient.patientProfile?.address || {},
+              emergencyContacts: patient.patientProfile?.emergencyContacts || [],
+              insuranceProvider: patient.patientProfile?.insuranceProvider || '',
+              insurancePolicyNumber: patient.patientProfile?.insurancePolicyNumber || ''
+            }
+          },
+          metadata: {
+            excluded: ['mental_health_chat']
+          },
+          versioning: {
+            beforeSnapshot: previousSnapshot,
+            afterSnapshot: nextSnapshot,
+            metadata: {
+              source: 'profile_update'
+            }
+          },
+          dbState: {
+            model: 'User',
+            operation: 'UPDATE',
+            id: patient._id.toString()
+          },
+          previousSnapshot,
+          onSuccess: async (auditDoc) => {
+            await User.updateOne(
+              { _id: patient._id },
+              {
+                $set: {
+                  blockchainHash: auditDoc.dataHash,
+                  blockchainTxHash: auditDoc.blockchainTxHash,
+                  blockchainTimestamp: auditDoc.timestamp
+                }
+              }
+            );
+          }
+        };
+      },
+      async (operationResult) => {
+        await restoreSnapshot(User, operationResult.previousSnapshot);
+      },
+      hashFromResult
     );
+
+    const patient = await User.findById(consistencyResult.entityId);
+    const verificationStatus = await getVerificationStatusForEntity({
+      entityType: 'USER_PROFILE',
+      entityId: patient._id,
+      dbHash: patient.blockchainHash
+    });
     
     // Recalculate profile completion
     const completionStatus = calculateProfileCompletion(patient);
@@ -133,6 +224,7 @@ exports.updatePatientProfile = async (req, res) => {
       data: {
         profile: {
           id: patient._id,
+          updatedAt: patient.updatedAt,
           email: patient.email,
           phone: patient.phone,
           firstName: patient.firstName,
@@ -140,7 +232,8 @@ exports.updatePatientProfile = async (req, res) => {
           fullName: patient.fullName,
           dateOfBirth: patient.dateOfBirth,
           gender: patient.gender,
-          patientProfile: patient.patientProfile
+          patientProfile: patient.patientProfile,
+          verificationStatus
         },
         completionStatus
       }
@@ -148,6 +241,14 @@ exports.updatePatientProfile = async (req, res) => {
     
   } catch (error) {
     console.error('Update patient profile error:', error);
+    if (error?.code === 'INSUFFICIENT_FUNDS') {
+      return res.status(503).json({
+        success: false,
+        message: 'Blockchain signer wallet has insufficient funds. Your profile change was rolled back safely. Please fund the wallet and retry.',
+        code: 'INSUFFICIENT_BLOCKCHAIN_FUNDS',
+        details: error.details || null
+      });
+    }
     res.status(500).json({ success: false, message: 'Failed to update profile' });
   }
 };
@@ -178,6 +279,22 @@ exports.getPatientEmergencyInfo = async (req, res) => {
     if (!patient) {
       return res.status(404).json({ success: false, message: 'Patient not found' });
     }
+
+    await writeAuditLog({
+      entityType: 'ACCESS_EVENT',
+      entityId: patient._id.toString(),
+      actorId: doctorId.toString(),
+      actionType: 'ACCESS',
+      data: {
+        patientId: patient._id.toString(),
+        doctorId: doctorId.toString(),
+        viewedAt: new Date().toISOString(),
+        fields: ['emergency_info']
+      },
+      metadata: {
+        purpose: 'emergency_info'
+      }
+    });
     
     res.status(200).json({
       success: true,
@@ -234,6 +351,28 @@ exports.getPatientProfileForDoctor = async (req, res) => {
       });
     }
 
+    const verificationStatus = await getVerificationStatusForEntity({
+      entityType: 'USER_PROFILE',
+      entityId: patient._id,
+      dbHash: patient.blockchainHash
+    });
+
+    await writeAuditLog({
+      entityType: 'ACCESS_EVENT',
+      entityId: patient._id.toString(),
+      actorId: doctorId.toString(),
+      actionType: 'ACCESS',
+      data: {
+        patientId: patient._id.toString(),
+        doctorId: doctorId.toString(),
+        viewedAt: new Date().toISOString(),
+        fields: ['profile_details']
+      },
+      metadata: {
+        purpose: 'medical_records'
+      }
+    });
+
     return res.status(200).json({
       success: true,
       data: {
@@ -246,7 +385,8 @@ exports.getPatientProfileForDoctor = async (req, res) => {
           phone: patient.phone,
           dateOfBirth: patient.dateOfBirth,
           gender: patient.gender,
-          patientProfile: patient.patientProfile
+          patientProfile: patient.patientProfile,
+          verificationStatus
         }
       }
     });
@@ -296,6 +436,12 @@ exports.getDoctorProfile = async (req, res) => {
     if (!doctor || doctor.role !== 'doctor') {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
+
+    const verificationStatus = await getVerificationStatusForEntity({
+      entityType: 'USER_PROFILE',
+      entityId: doctor._id,
+      dbHash: doctor.blockchainHash
+    });
     
     // Build response based on public/private access
     const profileData = {
@@ -316,6 +462,7 @@ exports.getDoctorProfile = async (req, res) => {
         languages: doctor.doctorProfile?.languages || []
       }
     };
+    profileData.verificationStatus = verificationStatus;
     
     // Add contact info based on settings
     if (isOwnProfile) {
@@ -360,6 +507,12 @@ exports.getDoctorProfileBySlug = async (req, res) => {
     if (!doctor) {
       return res.status(404).json({ success: false, message: 'Doctor not found' });
     }
+
+    const verificationStatus = await getVerificationStatusForEntity({
+      entityType: 'USER_PROFILE',
+      entityId: doctor._id,
+      dbHash: doctor.blockchainHash
+    });
     
     const settings = doctor.doctorProfile?.profileSettings || {};
     
@@ -381,6 +534,7 @@ exports.getDoctorProfileBySlug = async (req, res) => {
         languages: doctor.doctorProfile?.languages || []
       }
     };
+    profileData.verificationStatus = verificationStatus;
     
     if (settings.showEmail) profileData.email = doctor.email;
     if (settings.showPhone) profileData.phone = doctor.phone;
@@ -457,18 +611,68 @@ exports.updateDoctorProfile = async (req, res) => {
       }
     }
     
-    const doctor = await User.findByIdAndUpdate(
-      doctorId,
-      { $set: updateData },
-      { new: true, returnDocument: 'after', runValidators: true }
+    const consistencyResult = await executeWithBlockchainConsistency(
+      async () => {
+        const previous = await User.findById(doctorId);
+        const previousSnapshot = buildSnapshot(previous);
+
+        const doctor = await User.findByIdAndUpdate(
+          doctorId,
+          { $set: updateData },
+          { returnDocument: 'after', runValidators: true }
+        );
+
+        if (!doctor) {
+          throw new Error('Doctor not found');
+        }
+
+        return {
+          entityType: 'USER_PROFILE',
+          entityId: doctor._id.toString(),
+          actorId: doctorId.toString(),
+          actionType: 'UPDATE',
+          hashSource: {
+            id: doctor._id.toString(),
+            role: doctor.role,
+            firstName: doctor.firstName,
+            lastName: doctor.lastName,
+            gender: doctor.gender,
+            phone: doctor.phone,
+            email: doctor.email,
+            doctorProfile: doctor.doctorProfile || {}
+          },
+          dbState: {
+            model: 'User',
+            operation: 'UPDATE',
+            id: doctor._id.toString()
+          },
+          previousSnapshot,
+          onSuccess: async (auditDoc) => {
+            await User.updateOne(
+              { _id: doctor._id },
+              {
+                $set: {
+                  blockchainHash: auditDoc.dataHash,
+                  blockchainTxHash: auditDoc.blockchainTxHash,
+                  blockchainTimestamp: auditDoc.timestamp
+                }
+              }
+            );
+          }
+        };
+      },
+      async (operationResult) => {
+        await restoreSnapshot(User, operationResult.previousSnapshot);
+      },
+      hashFromResult
     );
-    
-    if (!doctor) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Doctor not found' 
-      });
-    }
+
+    const doctor = await User.findById(consistencyResult.entityId);
+    const verificationStatus = await getVerificationStatusForEntity({
+      entityType: 'USER_PROFILE',
+      entityId: doctor._id,
+      dbHash: doctor.blockchainHash
+    });
     
     res.status(200).json({
       success: true,
@@ -476,19 +680,30 @@ exports.updateDoctorProfile = async (req, res) => {
       data: {
         profile: {
           id: doctor._id,
+          updatedAt: doctor.updatedAt,
+          updatedAt: doctor.updatedAt,
           email: doctor.email,
           phone: doctor.phone,
           firstName: doctor.firstName,
           lastName: doctor.lastName,
           fullName: doctor.fullName,
           gender: doctor.gender,
-          doctorProfile: doctor.doctorProfile
+          doctorProfile: doctor.doctorProfile,
+          verificationStatus
         }
       }
     });
     
   } catch (error) {
     console.error('Update doctor profile error:', error);
+    if (error?.code === 'INSUFFICIENT_FUNDS') {
+      return res.status(503).json({
+        success: false,
+        message: 'Blockchain signer wallet has insufficient funds. Your profile change was rolled back safely. Please fund the wallet and retry.',
+        code: 'INSUFFICIENT_BLOCKCHAIN_FUNDS',
+        details: error.details || null
+      });
+    }
     res.status(500).json({ success: false, message: 'Failed to update profile' });
   }
 };
@@ -590,6 +805,7 @@ function getNestedValue(obj, path) {
 
 function hasValue(value) {
   if (value === null || value === undefined) return false;
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === 'object') return Object.keys(value).length > 0;
   if (typeof value === 'string') return value.trim() !== '';

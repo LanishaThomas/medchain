@@ -3,6 +3,8 @@ const User = require('../models/User');
 const Hospital = require('../models/Hospital');
 const DoctorHospitalMapping = require('../models/DoctorHospitalMapping');
 const { generateAuthTokens, hashRefreshToken } = require('../utils/jwt');
+const { writeAuditLog } = require('../services/blockchainAuditService');
+const { getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
 // ============================================
 // HOSPITAL REGISTRATION
@@ -109,6 +111,46 @@ exports.registerHospital = async (req, res, next) => {
     await adminUser.save();
 
     console.log('Refresh token stored, hospital registration complete');
+
+    const actorId = adminUser._id.toString();
+    await writeAuditLog({
+      entityType: 'HOSPITAL_PROFILE',
+      entityId: hospital._id.toString(),
+      actorId,
+      actionType: 'CREATE',
+      data: {
+        id: hospital._id.toString(),
+        name: hospital.name,
+        registrationNumber: hospital.registrationNumber,
+        licenseNumber: hospital.licenseNumber,
+        email: hospital.email,
+        phone: hospital.phone,
+        address: hospital.address,
+        type: hospital.type,
+        specialties: hospital.specialties || []
+      },
+      metadata: {
+        role: 'hospital_admin'
+      }
+    });
+
+    await writeAuditLog({
+      entityType: 'USER_PROFILE',
+      entityId: adminUser._id.toString(),
+      actorId,
+      actionType: 'CREATE',
+      data: {
+        id: adminUser._id.toString(),
+        role: adminUser.role,
+        email: adminUser.email,
+        firstName: adminUser.firstName,
+        lastName: adminUser.lastName,
+        hospitalId: hospital._id.toString()
+      },
+      metadata: {
+        role: 'hospital_admin'
+      }
+    });
 
     res.status(201).json({
       success: true,
@@ -247,6 +289,63 @@ exports.registerDoctor = async (req, res, next) => {
     doctor.addRefreshToken(tokens.refreshToken, req.headers['user-agent'], req.ip);
     await doctor.save();
 
+    const actorId = doctor._id.toString();
+    await writeAuditLog({
+      entityType: 'USER_PROFILE',
+      entityId: doctor._id.toString(),
+      actorId,
+      actionType: 'CREATE',
+      data: {
+        id: doctor._id.toString(),
+        role: doctor.role,
+        email: doctor.email,
+        firstName: doctor.firstName,
+        lastName: doctor.lastName,
+        doctorProfile: {
+          licenseNumber,
+          licenseState,
+          licenseExpiry: licenseExpiry ? new Date(licenseExpiry).toISOString() : null,
+          specializations: specializations || [],
+          yearsOfExperience,
+          bio
+        }
+      },
+      metadata: {
+        hospitalId: hospital._id.toString()
+      }
+    });
+
+    await writeAuditLog({
+      entityType: 'DOCTOR_REGISTRY',
+      entityId: mapping._id.toString(),
+      actorId,
+      actionType: 'CREATE',
+      data: {
+        mappingId: mapping._id.toString(),
+        doctorId: doctor._id.toString(),
+        hospitalId: hospital._id.toString(),
+        status: mapping.status,
+        employmentType: mapping.employmentType,
+        department: mapping.department,
+        appliedAt: mapping.appliedAt
+      },
+      metadata: {
+        event: 'DOCTOR_REGISTRATION_REQUEST'
+      }
+    });
+
+    const userVerificationStatus = await getVerificationStatusForEntity({
+      entityType: 'USER_PROFILE',
+      entityId: doctor._id,
+      dbHash: doctor.blockchainHash
+    });
+
+    const applicationVerificationStatus = await getVerificationStatusForEntity({
+      entityType: 'DOCTOR_REGISTRY',
+      entityId: mapping._id,
+      dbHash: null
+    });
+
     res.status(201).json({
       success: true,
       message: 'Registration successful. Awaiting hospital approval.',
@@ -255,13 +354,15 @@ exports.registerDoctor = async (req, res, next) => {
           id: doctor._id,
           email: doctor.email,
           fullName: doctor.fullName,
-          role: doctor.role
+          role: doctor.role,
+          verificationStatus: userVerificationStatus
         },
         application: {
           id: mapping._id,
           hospitalName: hospital.name,
           status: mapping.status,
-          appliedAt: mapping.appliedAt
+          appliedAt: mapping.appliedAt,
+          verificationStatus: applicationVerificationStatus
         },
         tokens: {
           accessToken: tokens.accessToken,
@@ -348,6 +449,31 @@ exports.registerPatient = async (req, res, next) => {
     // Store refresh token
     patient.addRefreshToken(tokens.refreshToken, req.headers['user-agent'], req.ip);
     await patient.save();
+
+    await writeAuditLog({
+      entityType: 'USER_PROFILE',
+      entityId: patient._id.toString(),
+      actorId: patient._id.toString(),
+      actionType: 'CREATE',
+      data: {
+        id: patient._id.toString(),
+        role: patient.role,
+        email: patient.email,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        phone: patient.phone,
+        dateOfBirth: patient.dateOfBirth,
+        gender: patient.gender,
+        patientProfile: {
+          bloodType: patient.patientProfile?.bloodType,
+          allergies: patient.patientProfile?.allergies || [],
+          chronicConditions: patient.patientProfile?.chronicConditions || []
+        }
+      },
+      metadata: {
+        excluded: ['mental_health_chat']
+      }
+    });
 
     res.status(201).json({
       success: true,

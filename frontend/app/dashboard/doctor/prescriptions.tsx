@@ -23,6 +23,7 @@ interface MedicineEntry {
 
 interface PrescriptionItem {
   id: string;
+  verificationStatus?: 'VERIFIED' | 'TAMPERED';
   prescriptionNumber: string;
   patientId: string;
   patientName: string;
@@ -31,6 +32,7 @@ interface PrescriptionItem {
   notes: string;
   hash: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export default function DoctorPrescriptionsComponent() {
@@ -305,7 +307,16 @@ export default function DoctorPrescriptionsComponent() {
               <div key={item.id} className="p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <p className="font-semibold text-gray-900">{item.prescriptionNumber}</p>
-                  <p className="text-xs text-gray-500">{new Date(item.createdAt).toLocaleString()}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-500">Last Modified: {new Date(item.updatedAt || item.createdAt).toLocaleString()}</p>
+                    <span className={`text-xs px-2 py-1 rounded font-semibold ${
+                      item.verificationStatus === 'VERIFIED'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {item.verificationStatus || 'TAMPERED'}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-sm text-gray-700">Patient: {item.patientName}</p>
                 <p className="text-sm text-gray-700">Hospital: {item.hospitalName}</p>

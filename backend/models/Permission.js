@@ -89,7 +89,21 @@ const permissionSchema = new mongoose.Schema({
   
   // Metadata
   hospital: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital' },
-  department: String
+  department: String,
+
+  blockchainHash: {
+    type: String,
+    default: null
+  },
+  blockchainTxHash: {
+    type: String,
+    default: null,
+    index: true
+  },
+  blockchainTimestamp: {
+    type: Date,
+    default: null
+  }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

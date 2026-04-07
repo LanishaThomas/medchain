@@ -1,5 +1,13 @@
 const Permission = require('../models/Permission');
 const User = require('../models/User');
+const { writeAuditLog } = require('../services/blockchainAuditService');
+const {
+  executeWithBlockchainConsistency,
+  hashFromResult,
+  buildSnapshot,
+  restoreSnapshot
+} = require('../services/blockchainConsistencyService');
+const { attachVerificationStatus, getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
 // ============================================
 // DOCTOR: REQUEST ACCESS
@@ -48,19 +56,62 @@ exports.requestAccess = async (req, res, next) => {
     }
 
     // Create permission request
-    const permission = await Permission.create({
-      patient: patientId,
-      doctor: doctorId,
-      accessType: accessType || 'medical_records',
-      requestReason: reason || 'Medical consultation',
-      expiryDate: new Date(expiryDate),
-      status: 'pending',
-      hospital: req.user.hospitalId // If doctor is at a hospital
-    });
+    const consistencyResult = await executeWithBlockchainConsistency(
+      async () => {
+        const permission = await Permission.create({
+          patient: patientId,
+          doctor: doctorId,
+          accessType: accessType || 'medical_records',
+          requestReason: reason || 'Medical consultation',
+          expiryDate: new Date(expiryDate),
+          status: 'pending',
+          hospital: req.user.hospitalId
+        });
 
-    // Populate for response
-    await permission.populate('patient', 'firstName lastName email phone');
-    await permission.populate('doctor', 'firstName lastName email role');
+        return {
+          entityType: 'PERMISSION',
+          entityId: permission._id.toString(),
+          actorId: doctorId.toString(),
+          actionType: 'CREATE',
+          metadata: { event: 'ACCESS_DURATION_DEFINED' },
+          hashSource: {
+            id: permission._id.toString(),
+            patient: permission.patient.toString(),
+            doctor: permission.doctor.toString(),
+            accessType: permission.accessType,
+            status: permission.status,
+            requestReason: permission.requestReason,
+            expiryDate: permission.expiryDate
+          },
+          createdId: permission._id,
+          dbState: {
+            model: 'Permission',
+            operation: 'CREATE',
+            id: permission._id.toString()
+          },
+          onSuccess: async (auditDoc) => {
+            await Permission.updateOne(
+              { _id: permission._id },
+              {
+                $set: {
+                  blockchainHash: auditDoc.dataHash,
+                  blockchainTxHash: auditDoc.blockchainTxHash,
+                  blockchainTimestamp: auditDoc.timestamp
+                }
+              }
+            );
+          }
+        };
+      },
+      async (operationResult) => {
+        await Permission.findByIdAndDelete(operationResult.createdId);
+      },
+      hashFromResult
+    );
+
+    const permission = await Permission.findById(consistencyResult.entityId)
+      .populate('patient', 'firstName lastName email phone')
+      .populate('doctor', 'firstName lastName email role');
 
     console.log(`📋 Access request created:`, {
       doctorId: req.user.id,
@@ -78,7 +129,12 @@ exports.requestAccess = async (req, res, next) => {
         accessType: permission.accessType,
         requestReason: permission.requestReason,
         expiryDate: permission.expiryDate,
-        requestedAt: permission.requestedAt
+        requestedAt: permission.requestedAt,
+        verificationStatus: await getVerificationStatusForEntity({
+          entityType: 'PERMISSION',
+          entityId: permission._id,
+          dbHash: permission.blockchainHash
+        })
       }
     });
   } catch (error) {
@@ -111,24 +167,33 @@ exports.getMyAccessRequests = async (req, res, next) => {
       revoked: requests.filter(r => r.status === 'revoked').length
     };
 
+    const mappedRequests = requests.map(r => ({
+      id: r._id,
+      patientId: r.patient._id,
+      patientName: `${r.patient.firstName} ${r.patient.lastName}`,
+      patientEmail: r.patient.email,
+      accessType: r.accessType,
+      status: r.status,
+      requestReason: r.requestReason,
+      requestedAt: r.requestedAt,
+      approvedAt: r.approvedAt,
+      rejectionReason: r.rejectionReason,
+      expiryDate: r.expiryDate,
+      daysRemaining: r.daysRemaining,
+      blockchainHash: r.blockchainHash
+    }));
+
+    const verifiedRequests = await attachVerificationStatus(mappedRequests, {
+      entityType: 'PERMISSION',
+      getId: (item) => item.id,
+      getHash: (item) => item.blockchainHash
+    });
+
     res.status(200).json({
       success: true,
       data: {
         summary,
-        requests: requests.map(r => ({
-          id: r._id,
-          patientId: r.patient._id,
-          patientName: `${r.patient.firstName} ${r.patient.lastName}`,
-          patientEmail: r.patient.email,
-          accessType: r.accessType,
-          status: r.status,
-          requestReason: r.requestReason,
-          requestedAt: r.requestedAt,
-          approvedAt: r.approvedAt,
-          rejectionReason: r.rejectionReason,
-          expiryDate: r.expiryDate,
-          daysRemaining: r.daysRemaining
-        }))
+        requests: verifiedRequests
       }
     });
   } catch (error) {
@@ -219,22 +284,31 @@ exports.getPendingRequests = async (req, res, next) => {
       .populate('doctor', 'firstName lastName email role hospital')
       .sort({ requestedAt: -1 });
 
+    const mappedPending = pendingRequests.map(r => ({
+      id: r._id,
+      doctorId: r.doctor._id,
+      doctorName: `${r.doctor.firstName} ${r.doctor.lastName}`,
+      doctorEmail: r.doctor.email,
+      doctorRole: r.doctor.role,
+      accessType: r.accessType,
+      requestReason: r.requestReason,
+      requestedAt: r.requestedAt,
+      expiryDate: r.expiryDate,
+      daysRequested: Math.ceil((r.expiryDate - new Date()) / (1000 * 60 * 60 * 24)),
+      blockchainHash: r.blockchainHash
+    }));
+
+    const verifiedPending = await attachVerificationStatus(mappedPending, {
+      entityType: 'PERMISSION',
+      getId: (item) => item.id,
+      getHash: (item) => item.blockchainHash
+    });
+
     res.status(200).json({
       success: true,
       data: {
         count: pendingRequests.length,
-        requests: pendingRequests.map(r => ({
-          id: r._id,
-          doctorId: r.doctor._id,
-          doctorName: `${r.doctor.firstName} ${r.doctor.lastName}`,
-          doctorEmail: r.doctor.email,
-          doctorRole: r.doctor.role,
-          accessType: r.accessType,
-          requestReason: r.requestReason,
-          requestedAt: r.requestedAt,
-          expiryDate: r.expiryDate,
-          daysRequested: Math.ceil((r.expiryDate - new Date()) / (1000 * 60 * 60 * 24))
-        }))
+        requests: verifiedPending
       }
     });
   } catch (error) {
@@ -290,8 +364,53 @@ exports.approveAccess = async (req, res, next) => {
       });
     }
 
-    // Approve
-    await permission.approve(notes);
+    const consistencyResult = await executeWithBlockchainConsistency(
+      async () => {
+        const previousSnapshot = buildSnapshot(permission);
+        await permission.approve(notes);
+
+        return {
+          entityType: 'PERMISSION',
+          entityId: permission._id.toString(),
+          actorId: patientId.toString(),
+          actionType: 'APPROVE',
+          metadata: { event: 'ACCESS_GRANTED' },
+          hashSource: {
+            id: permission._id.toString(),
+            patientId: permission.patient.toString(),
+            doctorId: permission.doctor.toString(),
+            accessType: permission.accessType,
+            status: permission.status,
+            approvedAt: permission.approvedAt,
+            expiryDate: permission.expiryDate,
+            notes: notes || ''
+          },
+          previousSnapshot,
+          dbState: {
+            model: 'Permission',
+            operation: 'UPDATE',
+            id: permission._id.toString()
+          },
+          onSuccess: async (auditDoc) => {
+            await Permission.updateOne(
+              { _id: permission._id },
+              {
+                $set: {
+                  blockchainHash: auditDoc.dataHash,
+                  blockchainTxHash: auditDoc.blockchainTxHash,
+                  blockchainTimestamp: auditDoc.timestamp
+                }
+              }
+            );
+          }
+        };
+      },
+      async (operationResult) => {
+        await restoreSnapshot(Permission, operationResult.previousSnapshot);
+      },
+      hashFromResult
+    );
+
     await permission.populate('doctor', 'firstName lastName email');
     await permission.populate('patient', 'firstName lastName');
 
@@ -312,7 +431,12 @@ exports.approveAccess = async (req, res, next) => {
         status: permission.status,
         approvedAt: permission.approvedAt,
         expiryDate: permission.expiryDate,
-        daysRemaining: permission.daysRemaining
+        daysRemaining: permission.daysRemaining,
+        verificationStatus: await getVerificationStatusForEntity({
+          entityType: 'PERMISSION',
+          entityId: permission._id,
+          dbHash: permission.blockchainHash
+        })
       }
     });
   } catch (error) {
@@ -362,8 +486,49 @@ exports.rejectAccess = async (req, res, next) => {
       });
     }
 
-    // Reject
-    await permission.reject(reason);
+    await executeWithBlockchainConsistency(
+      async () => {
+        const previousSnapshot = buildSnapshot(permission);
+        await permission.reject(reason);
+
+        return {
+          entityType: 'PERMISSION',
+          entityId: permission._id.toString(),
+          actorId: patientId.toString(),
+          actionType: 'REJECT',
+          hashSource: {
+            id: permission._id.toString(),
+            patientId: permission.patient.toString(),
+            doctorId: permission.doctor.toString(),
+            status: permission.status,
+            reason: permission.rejectionReason || reason || ''
+          },
+          previousSnapshot,
+          dbState: {
+            model: 'Permission',
+            operation: 'UPDATE',
+            id: permission._id.toString()
+          },
+          onSuccess: async (auditDoc) => {
+            await Permission.updateOne(
+              { _id: permission._id },
+              {
+                $set: {
+                  blockchainHash: auditDoc.dataHash,
+                  blockchainTxHash: auditDoc.blockchainTxHash,
+                  blockchainTimestamp: auditDoc.timestamp
+                }
+              }
+            );
+          }
+        };
+      },
+      async (operationResult) => {
+        await restoreSnapshot(Permission, operationResult.previousSnapshot);
+      },
+      hashFromResult
+    );
+
     await permission.populate('doctor', 'firstName lastName email');
 
     console.log(`❌ Permission rejected:`, {
@@ -380,7 +545,12 @@ exports.rejectAccess = async (req, res, next) => {
         doctor: `${permission.doctor.firstName} ${permission.doctor.lastName}`,
         status: permission.status,
         rejectedAt: permission.rejectedAt,
-        reason: permission.rejectionReason
+        reason: permission.rejectionReason,
+        verificationStatus: await getVerificationStatusForEntity({
+          entityType: 'PERMISSION',
+          entityId: permission._id,
+          dbHash: permission.blockchainHash
+        })
       }
     });
   } catch (error) {
@@ -430,8 +600,51 @@ exports.revokeAccess = async (req, res, next) => {
       });
     }
 
-    // Revoke
-    await permission.revoke(reason);
+    await executeWithBlockchainConsistency(
+      async () => {
+        const previousSnapshot = buildSnapshot(permission);
+        await permission.revoke(reason);
+
+        return {
+          entityType: 'PERMISSION',
+          entityId: permission._id.toString(),
+          actorId: patientId.toString(),
+          actionType: 'REVOKE',
+          metadata: { event: 'ACCESS_REVOKED' },
+          hashSource: {
+            id: permission._id.toString(),
+            patientId: permission.patient.toString(),
+            doctorId: permission.doctor.toString(),
+            status: permission.status,
+            revokedAt: permission.revokedAt,
+            reason: permission.revocationReason || reason || ''
+          },
+          previousSnapshot,
+          dbState: {
+            model: 'Permission',
+            operation: 'UPDATE',
+            id: permission._id.toString()
+          },
+          onSuccess: async (auditDoc) => {
+            await Permission.updateOne(
+              { _id: permission._id },
+              {
+                $set: {
+                  blockchainHash: auditDoc.dataHash,
+                  blockchainTxHash: auditDoc.blockchainTxHash,
+                  blockchainTimestamp: auditDoc.timestamp
+                }
+              }
+            );
+          }
+        };
+      },
+      async (operationResult) => {
+        await restoreSnapshot(Permission, operationResult.previousSnapshot);
+      },
+      hashFromResult
+    );
+
     await permission.populate('doctor', 'firstName lastName email');
 
     console.log(`🔓 Permission revoked:`, {
@@ -448,7 +661,12 @@ exports.revokeAccess = async (req, res, next) => {
         doctor: `${permission.doctor.firstName} ${permission.doctor.lastName}`,
         status: permission.status,
         revokedAt: permission.revokedAt,
-        reason: permission.revocationReason
+        reason: permission.revocationReason,
+        verificationStatus: await getVerificationStatusForEntity({
+          entityType: 'PERMISSION',
+          entityId: permission._id,
+          dbHash: permission.blockchainHash
+        })
       }
     });
   } catch (error) {
@@ -487,6 +705,27 @@ exports.getPatientPermissions = async (req, res, next) => {
       expired: permissions.filter(p => p.status === 'expired')
     };
 
+    const mappedPermissions = permissions.map(p => ({
+      id: p._id,
+      doctor: `${p.doctor.firstName} ${p.doctor.lastName}`,
+      doctorEmail: p.doctor.email,
+      accessType: p.accessType,
+      status: p.status,
+      requestReason: p.requestReason,
+      requestedAt: p.requestedAt,
+      approvedAt: p.approvedAt,
+      expiryDate: p.expiryDate,
+      daysRemaining: p.daysRemaining,
+      isActive: p.isActive,
+      blockchainHash: p.blockchainHash
+    }));
+
+    const verifiedPermissions = await attachVerificationStatus(mappedPermissions, {
+      entityType: 'PERMISSION',
+      getId: (item) => item.id,
+      getHash: (item) => item.blockchainHash
+    });
+
     res.status(200).json({
       success: true,
       data: {
@@ -498,19 +737,7 @@ exports.getPatientPermissions = async (req, res, next) => {
           rejected: grouped.rejected.length,
           expired: grouped.expired.length
         },
-        permissions: permissions.map(p => ({
-          id: p._id,
-          doctor: `${p.doctor.firstName} ${p.doctor.lastName}`,
-          doctorEmail: p.doctor.email,
-          accessType: p.accessType,
-          status: p.status,
-          requestReason: p.requestReason,
-          requestedAt: p.requestedAt,
-          approvedAt: p.approvedAt,
-          expiryDate: p.expiryDate,
-          daysRemaining: p.daysRemaining,
-          isActive: p.isActive
-        }))
+        permissions: verifiedPermissions
       }
     });
   } catch (error) {
@@ -559,6 +786,27 @@ exports.checkAccess = async (req, res, next) => {
 
     if (permission) {
       await permission.recordAccess();
+      await writeAuditLog({
+        entityType: 'ACCESS_EVENT',
+        entityId: permission._id.toString(),
+        actorId: doctorId.toString(),
+        actionType: 'ACCESS',
+        data: {
+          permissionId: permission._id.toString(),
+          patientId: patientId.toString(),
+          doctorId: doctorId.toString(),
+          accessType,
+          accessedAt: new Date().toISOString(),
+          accessCount: permission.accessCount,
+          expiresAt: permission.expiryDate
+        },
+        metadata: {
+          purpose: accessType,
+          duration: permission.expiryDate
+            ? Math.max(0, Math.floor((new Date(permission.expiryDate).getTime() - Date.now()) / 1000))
+            : null
+        }
+      });
     }
 
     // Proceed
@@ -591,27 +839,36 @@ exports.getDoctorApprovedPermissions = async (req, res, next) => {
       .populate('hospital', 'name')
       .sort({ approvedAt: -1 });
 
+    const mappedDoctorPermissions = permissions.map(p => ({
+      _id: p._id,
+      patient: {
+        _id: p.patient._id,
+        firstName: p.patient.firstName,
+        lastName: p.patient.lastName,
+        email: p.patient.email,
+        phone: p.patient.phone
+      },
+      accessType: p.accessType,
+      status: p.status,
+      expiryDate: p.expiryDate,
+      allowedActions: p.allowedActions,
+      lastAccessedAt: p.lastAccessedAt,
+      accessCount: p.accessCount,
+      hospital: p.hospital ? { name: p.hospital.name } : null,
+      blockchainHash: p.blockchainHash
+    }));
+
+    const verifiedDoctorPermissions = await attachVerificationStatus(mappedDoctorPermissions, {
+      entityType: 'PERMISSION',
+      getId: (item) => item._id,
+      getHash: (item) => item.blockchainHash
+    });
+
     res.status(200).json({
       success: true,
       data: {
         count: permissions.length,
-        permissions: permissions.map(p => ({
-          _id: p._id,
-          patient: {
-            _id: p.patient._id,
-            firstName: p.patient.firstName,
-            lastName: p.patient.lastName,
-            email: p.patient.email,
-            phone: p.patient.phone
-          },
-          accessType: p.accessType,
-          status: p.status,
-          expiryDate: p.expiryDate,
-          allowedActions: p.allowedActions,
-          lastAccessedAt: p.lastAccessedAt,
-          accessCount: p.accessCount,
-          hospital: p.hospital ? { name: p.hospital.name } : null
-        }))
+        permissions: verifiedDoctorPermissions
       }
     });
   } catch (error) {

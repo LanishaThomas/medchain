@@ -4,6 +4,11 @@ const User = require('../models/User');
 const Hospital = require('../models/Hospital');
 const DoctorHospitalMapping = require('../models/DoctorHospitalMapping');
 const Permission = require('../models/Permission');
+const {
+  executeWithBlockchainConsistency,
+  hashFromResult
+} = require('../services/blockchainConsistencyService');
+const { attachVerificationStatus, getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
 const createPrescription = async (req, res) => {
   try {
@@ -100,16 +105,72 @@ const createPrescription = async (req, res) => {
       .map((item) => `${item.name}: ${item.dosage}`)
       .join('; ');
 
-    const prescription = await Prescription.create({
-      patientId,
-      doctorId,
-      hospitalId,
-      medicines: normalizedMedicines,
-      dosage: combinedDosage,
-      notes: notes ? String(notes).trim() : ''
-    });
+    const consistencyResult = await executeWithBlockchainConsistency(
+      async () => {
+        const prescription = await Prescription.create({
+          patientId,
+          doctorId,
+          hospitalId,
+          medicines: normalizedMedicines,
+          dosage: combinedDosage,
+          notes: notes ? String(notes).trim() : ''
+        });
 
-    const populatedPrescription = await Prescription.findById(prescription._id)
+        const afterSnapshot = prescription.toObject({ depopulate: true, virtuals: false });
+
+        return {
+          entityType: 'PRESCRIPTION',
+          entityId: prescription._id.toString(),
+          actorId: doctorId.toString(),
+          actionType: 'CREATE',
+          hashSource: {
+            id: prescription._id.toString(),
+            prescriptionNumber: prescription.prescriptionNumber,
+            patientId: prescription.patientId.toString(),
+            doctorId: prescription.doctorId.toString(),
+            hospitalId: prescription.hospitalId.toString(),
+            medicines: prescription.medicines,
+            dosage: prescription.dosage,
+            notes: prescription.notes,
+            status: prescription.status,
+            hash: prescription.hash
+          },
+          versioning: {
+            beforeSnapshot: null,
+            afterSnapshot,
+            metadata: {
+              hospitalId: hospitalId.toString()
+            }
+          },
+          dbState: {
+            model: 'Prescription',
+            operation: 'CREATE',
+            id: prescription._id.toString()
+          },
+          onSuccess: async (auditDoc) => {
+            await Prescription.updateOne(
+              { _id: prescription._id },
+              {
+                $set: {
+                  blockchainHash: auditDoc.dataHash,
+                  blockchainTxHash: auditDoc.blockchainTxHash,
+                  blockchainTimestamp: auditDoc.timestamp
+                }
+              }
+            );
+          },
+          createdId: prescription._id
+        };
+      },
+      async (operationResult) => {
+        await Prescription.findByIdAndDelete(operationResult.createdId);
+      },
+      hashFromResult
+    );
+
+    const prescriptionId = consistencyResult.entityId;
+
+    const populatedPrescription = await Prescription.findById(prescriptionId)
       .populate('patientId', 'firstName lastName email')
       .populate('doctorId', 'firstName lastName email')
       .populate('hospitalId', 'name');
@@ -134,6 +195,11 @@ const createPrescription = async (req, res) => {
         notes: populatedPrescription.notes,
         hash: populatedPrescription.hash,
         status: populatedPrescription.status,
+        verificationStatus: await getVerificationStatusForEntity({
+          entityType: 'PRESCRIPTION',
+          entityId: populatedPrescription._id,
+          dbHash: populatedPrescription.blockchainHash
+        }),
         createdAt: populatedPrescription.createdAt
       }
     });
@@ -162,23 +228,32 @@ const getDoctorPrescriptions = async (req, res) => {
       .populate('hospitalId', 'name')
       .sort({ createdAt: -1 });
 
+    const mapped = prescriptions.map((item) => ({
+      id: item._id,
+      prescriptionNumber: item.prescriptionNumber,
+      patientId: item.patientId?._id,
+      patientName: item.patientId ? `${item.patientId.firstName} ${item.patientId.lastName}` : null,
+      patientEmail: item.patientId?.email || null,
+      hospitalId: item.hospitalId?._id,
+      hospitalName: item.hospitalId?.name || null,
+      medicines: item.medicines,
+      notes: item.notes,
+      hash: item.hash,
+      status: item.status,
+      blockchainHash: item.blockchainHash,
+      createdAt: item.createdAt
+    }));
+
+    const verified = await attachVerificationStatus(mapped, {
+      entityType: 'PRESCRIPTION',
+      getId: (item) => item.id,
+      getHash: (item) => item.blockchainHash
+    });
+
     return res.status(200).json({
       success: true,
       count: prescriptions.length,
-      data: prescriptions.map((item) => ({
-        id: item._id,
-        prescriptionNumber: item.prescriptionNumber,
-        patientId: item.patientId?._id,
-        patientName: item.patientId ? `${item.patientId.firstName} ${item.patientId.lastName}` : null,
-        patientEmail: item.patientId?.email || null,
-        hospitalId: item.hospitalId?._id,
-        hospitalName: item.hospitalId?.name || null,
-        medicines: item.medicines,
-        notes: item.notes,
-        hash: item.hash,
-        status: item.status,
-        createdAt: item.createdAt
-      }))
+      data: verified
     });
   } catch (error) {
     console.error('Get doctor prescriptions error:', error);
@@ -204,23 +279,32 @@ const getPatientPrescriptions = async (req, res) => {
       .populate('hospitalId', 'name')
       .sort({ createdAt: -1 });
 
+    const mapped = prescriptions.map((item) => ({
+      id: item._id,
+      prescriptionNumber: item.prescriptionNumber,
+      doctorId: item.doctorId?._id,
+      doctorName: item.doctorId ? `Dr. ${item.doctorId.firstName} ${item.doctorId.lastName}` : null,
+      doctorEmail: item.doctorId?.email || null,
+      hospitalId: item.hospitalId?._id,
+      hospitalName: item.hospitalId?.name || null,
+      medicines: item.medicines,
+      notes: item.notes,
+      hash: item.hash,
+      status: item.status,
+      blockchainHash: item.blockchainHash,
+      createdAt: item.createdAt
+    }));
+
+    const verified = await attachVerificationStatus(mapped, {
+      entityType: 'PRESCRIPTION',
+      getId: (item) => item.id,
+      getHash: (item) => item.blockchainHash
+    });
+
     return res.status(200).json({
       success: true,
       count: prescriptions.length,
-      data: prescriptions.map((item) => ({
-        id: item._id,
-        prescriptionNumber: item.prescriptionNumber,
-        doctorId: item.doctorId?._id,
-        doctorName: item.doctorId ? `Dr. ${item.doctorId.firstName} ${item.doctorId.lastName}` : null,
-        doctorEmail: item.doctorId?.email || null,
-        hospitalId: item.hospitalId?._id,
-        hospitalName: item.hospitalId?.name || null,
-        medicines: item.medicines,
-        notes: item.notes,
-        hash: item.hash,
-        status: item.status,
-        createdAt: item.createdAt
-      }))
+      data: verified
     });
   } catch (error) {
     console.error('Get patient prescriptions error:', error);

@@ -5,6 +5,7 @@ import { api } from '@/services/authService';
 
 interface MedicalRecord {
   _id: string;
+  verificationStatus?: 'VERIFIED' | 'TAMPERED';
   title: string;
   description: string;
   fileUrl: string;
@@ -30,6 +31,7 @@ interface MedicalRecord {
     name: string;
   };
   createdAt: string;
+  updatedAt?: string;
   formattedSize?: string;
   tags?: string[];
 }
@@ -584,6 +586,7 @@ export default function MedicalRecordsComponent() {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Record</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Type</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Size</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Uploaded</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Actions</th>
@@ -606,8 +609,20 @@ export default function MedicalRecordsComponent() {
                       {getRecordTypeLabel(record.recordType)}
                     </span>
                   </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
+                      record.verificationStatus === 'VERIFIED'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {record.verificationStatus || 'TAMPERED'}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
                     {formatSize(record.fileSize)}
+                    <div className="mt-1 text-xs text-gray-500">
+                      Last Modified: {new Date(record.updatedAt || record.createdAt).toLocaleString()}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm text-gray-900">
@@ -748,6 +763,18 @@ export default function MedicalRecordsComponent() {
                   <p className="font-medium">
                     {viewingRecord.uploadedBy.firstName} {viewingRecord.uploadedBy.lastName}
                     <span className="text-gray-500 ml-1">({viewingRecord.uploadedBy.role})</span>
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">Verification</label>
+                  <p>
+                    <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
+                      viewingRecord.verificationStatus === 'VERIFIED'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {viewingRecord.verificationStatus || 'TAMPERED'}
+                    </span>
                   </p>
                 </div>
                 {viewingRecord.hospital && (

@@ -187,6 +187,20 @@ const userSchema = new mongoose.Schema({
     type: String,
     sparse: true,
     match: [/^0x[a-fA-F0-9]{40}$/, 'Invalid wallet address']
+  },
+
+  blockchainHash: {
+    type: String,
+    default: null
+  },
+  blockchainTxHash: {
+    type: String,
+    default: null,
+    index: true
+  },
+  blockchainTimestamp: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,

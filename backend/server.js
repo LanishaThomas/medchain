@@ -19,6 +19,7 @@ const medicalRecordRoutes = require('./routes/medicalRecordRoutes');
 const emergencyRoutes = require('./routes/emergencyRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const prescriptionRoutes = require('./routes/prescriptionRoutes');
+const blockchainRoutes = require('./routes/blockchainRoutes');
 
 const app = express();
 
@@ -99,6 +100,7 @@ app.use('/api/medical-records', medicalRecordRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
+app.use('/api/blockchain', blockchainRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

@@ -41,6 +41,8 @@ interface Address {
 
 interface PatientProfile {
   id: string;
+  verificationStatus?: 'VERIFIED' | 'TAMPERED';
+  updatedAt?: string;
   email: string;
   phone: string;
   firstName: string;
@@ -283,6 +285,18 @@ export default function PatientProfilePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
           <p className="text-gray-600">Manage your personal and health information</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Last Modified: {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleString() : 'N/A'}
+          </p>
+          {profile?.verificationStatus && (
+            <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-semibold ${
+              profile.verificationStatus === 'VERIFIED'
+                ? 'bg-green-100 text-green-800'
+                : 'bg-red-100 text-red-800'
+            }`}>
+              {profile.verificationStatus}
+            </span>
+          )}
         </div>
         {!editMode ? (
           <button

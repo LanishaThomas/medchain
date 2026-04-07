@@ -5,6 +5,7 @@ import { authService } from '@/services/authService';
 
 interface PrescriptionItem {
   id: string;
+  verificationStatus?: 'VERIFIED' | 'TAMPERED';
   prescriptionNumber: string;
   doctorName: string;
   hospitalName: string;
@@ -17,6 +18,7 @@ interface PrescriptionItem {
   hash: string;
   status: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export default function PatientPrescriptionsComponent() {
@@ -59,7 +61,19 @@ export default function PatientPrescriptionsComponent() {
         <div key={item.id} className="bg-white border border-gray-200 rounded-lg p-5">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <p className="font-semibold text-gray-900">{item.prescriptionNumber}</p>
-            <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 capitalize">{item.status}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
+                Last Modified: {new Date(item.updatedAt || item.createdAt).toLocaleString()}
+              </span>
+              <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 capitalize">{item.status}</span>
+              <span className={`text-xs px-2 py-1 rounded font-semibold ${
+                item.verificationStatus === 'VERIFIED'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {item.verificationStatus || 'TAMPERED'}
+              </span>
+            </div>
           </div>
 
           <p className="text-sm text-gray-700">Doctor: {item.doctorName}</p>

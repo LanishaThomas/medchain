@@ -8,6 +8,7 @@ const Hospital = require('../models/Hospital');
 const EmergencyAccessLog = require('../models/EmergencyAccessLog');
 const Notification = require('../models/Notification');
 const { encrypt, decrypt, generateAccessToken, hashToken } = require('../utils/encryption');
+const { writeAuditLog } = require('../services/blockchainAuditService');
 
 /**
  * Generate Emergency QR Token for Patient
@@ -70,6 +71,22 @@ exports.generateEmergencyQR = async (req, res) => {
       'patientProfile.emergencySettings.lastQrGenerated': new Date(),
       'patientProfile.emergencySettings.qrAccessToken': hashedToken
     });
+
+    await writeAuditLog({
+      entityType: 'EMERGENCY_ACCESS',
+      entityId: patientId.toString(),
+      actorId: patientId.toString(),
+      actionType: 'GENERATE_QR',
+      data: {
+        patientId: patientId.toString(),
+        expiresAt: expiresAt.toISOString(),
+        durationMinutes: accessDuration,
+        qrAccessTokenHash: hashedToken
+      },
+      metadata: {
+        event: 'EMERGENCY_QR_GENERATED'
+      }
+    });
     
     res.status(200).json({
       success: true,
@@ -112,6 +129,20 @@ exports.updateEmergencySettings = async (req, res) => {
     
     await User.findByIdAndUpdate(patientId, {
       'patientProfile.emergencySettings.accessDuration': accessDuration
+    });
+
+    await writeAuditLog({
+      entityType: 'EMERGENCY_ACCESS',
+      entityId: patientId.toString(),
+      actorId: patientId.toString(),
+      actionType: 'UPDATE_SETTINGS',
+      data: {
+        patientId: patientId.toString(),
+        accessDuration
+      },
+      metadata: {
+        event: 'EMERGENCY_ACCESS_DURATION_UPDATED'
+      }
     });
     
     res.status(200).json({
@@ -248,6 +279,42 @@ exports.accessEmergencyData = async (req, res) => {
     accessLog.notificationSent = true;
     accessLog.notificationSentAt = new Date();
     await accessLog.save();
+
+    await writeAuditLog({
+      entityType: 'EMERGENCY_ACCESS',
+      entityId: accessLog._id.toString(),
+      actorId: accessingUser.id.toString(),
+      actionType: 'ACCESS',
+      data: {
+        accessLogId: accessLog._id.toString(),
+        patientId: patientId.toString(),
+        hospitalId: hospital._id.toString(),
+        qrScanTime: accessLog.accessTime,
+        expiresAt: accessLog.expiresAt,
+        accessStatus: accessLog.accessStatus
+      },
+      metadata: {
+        event: 'QR_SCAN_EVENT'
+      }
+    });
+
+    await writeAuditLog({
+      entityType: 'EMERGENCY_ACCESS',
+      entityId: accessLog._id.toString(),
+      actorId: accessingUser.id.toString(),
+      actionType: 'GRANT',
+      data: {
+        accessLogId: accessLog._id.toString(),
+        patientId: patientId.toString(),
+        hospitalId: hospital._id.toString(),
+        grantedAt: accessLog.accessTime,
+        expiresAt: accessLog.expiresAt,
+        dataAccessed: accessLog.dataAccessed
+      },
+      metadata: {
+        temporary: true
+      }
+    });
     
     // Extract emergency data
     const profile = patient.patientProfile || {};
@@ -295,6 +362,22 @@ exports.accessEmergencyData = async (req, res) => {
       // Address for context
       address: profile.address || {}
     };
+
+    await writeAuditLog({
+      entityType: 'EMERGENCY_ACCESS',
+      entityId: accessLog._id.toString(),
+      actorId: accessingUser.id.toString(),
+      actionType: 'ACCESS',
+      data: {
+        accessLogId: accessLog._id.toString(),
+        patientId: patientId.toString(),
+        doctorOrStaffId: accessingUser.id.toString(),
+        viewedAt: new Date().toISOString()
+      },
+      metadata: {
+        event: 'EMERGENCY_DATA_VIEWED'
+      }
+    });
     
     res.status(200).json({
       success: true,
@@ -401,6 +484,19 @@ exports.revokeAccess = async (req, res) => {
     }
     
     await accessLog.revoke(patientId, reason || 'Revoked by patient');
+
+    await writeAuditLog({
+      entityType: 'EMERGENCY_ACCESS',
+      entityId: accessLog._id.toString(),
+      actorId: patientId.toString(),
+      actionType: 'REVOKE',
+      data: {
+        accessLogId: accessLog._id.toString(),
+        patientId: patientId.toString(),
+        revokedAt: accessLog.revokedAt,
+        reason: accessLog.revokedReason || reason || ''
+      }
+    });
     
     // Notify hospital that access was revoked
     const hospital = await Hospital.findById(accessLog.hospital);
@@ -456,6 +552,23 @@ exports.reviewAccessLog = async (req, res) => {
         message: 'Access log not found'
       });
     }
+
+    await writeAuditLog({
+      entityType: 'EMERGENCY_ACCESS',
+      entityId: accessLog._id.toString(),
+      actorId: patientId.toString(),
+      actionType: 'REVIEW',
+      data: {
+        accessLogId: accessLog._id.toString(),
+        patientId: patientId.toString(),
+        reviewedAt: accessLog.patientReview?.reviewedAt || new Date(),
+        flaggedAsSuspicious: !!accessLog.patientReview?.flaggedAsSuspicious,
+        notes: accessLog.patientReview?.notes || ''
+      },
+      metadata: {
+        event: 'EMERGENCY_ACCESS_REVIEWED'
+      }
+    });
     
     res.status(200).json({
       success: true,
@@ -483,6 +596,21 @@ exports.invalidateCurrentQR = async (req, res) => {
     
     await User.findByIdAndUpdate(patientId, {
       'patientProfile.emergencySettings.qrAccessToken': hashedToken
+    });
+
+    await writeAuditLog({
+      entityType: 'EMERGENCY_ACCESS',
+      entityId: patientId.toString(),
+      actorId: patientId.toString(),
+      actionType: 'INVALIDATE_QR',
+      data: {
+        patientId: patientId.toString(),
+        qrAccessTokenHash: hashedToken,
+        invalidatedAt: new Date().toISOString()
+      },
+      metadata: {
+        event: 'EMERGENCY_QR_INVALIDATED'
+      }
     });
     
     res.status(200).json({

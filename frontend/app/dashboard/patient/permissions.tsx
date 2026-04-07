@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 
 interface PendingRequest {
   id: string;
+  verificationStatus?: 'VERIFIED' | 'TAMPERED';
   doctorId: string;
   doctorName: string;
   doctorEmail: string;
@@ -16,6 +17,7 @@ interface PendingRequest {
 
 interface Permission {
   id: string;
+  verificationStatus?: 'VERIFIED' | 'TAMPERED';
   doctorId: string;
   doctor: string;
   hospital?: string;
@@ -265,6 +267,16 @@ export default function PatientPermissionsComponent() {
                   <p className="text-gray-700 bg-gray-50 p-3 rounded">{req.requestReason}</p>
                 </div>
 
+                <div className="mb-4">
+                  <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
+                    req.verificationStatus === 'VERIFIED'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {(req.verificationStatus || 'TAMPERED')}
+                  </span>
+                </div>
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => approveRequest(req.id)}
@@ -308,6 +320,15 @@ export default function PatientPermissionsComponent() {
                       <span className="inline-block px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium mb-2">
                         ✅ ACTIVE
                       </span>
+                      <div>
+                        <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
+                          perm.verificationStatus === 'VERIFIED'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {(perm.verificationStatus || 'TAMPERED')}
+                        </span>
+                      </div>
                       {perm.daysRemaining !== undefined && (
                         <p className="text-sm text-gray-600">
                           {perm.daysRemaining} days remaining
@@ -397,6 +418,15 @@ export default function PatientPermissionsComponent() {
                       {perm.status === 'rejected' && '❌ REJECTED'}
                       {(!perm.isActive && perm.status === 'approved') && '⏰ EXPIRED'}
                     </span>
+                    <div className="mt-2">
+                      <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
+                        perm.verificationStatus === 'VERIFIED'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {(perm.verificationStatus || 'TAMPERED')}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
