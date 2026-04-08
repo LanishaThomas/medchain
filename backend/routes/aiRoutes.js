@@ -265,6 +265,34 @@ router.post('/chat', async (req, res) => {
 });
 
 /**
+ * GET /api/ai/medicine-info/:name
+ * Resolve any medicine name (brand/generic/regional) and return FDA drug data.
+ * No AI involved — data comes from RxNorm + OpenFDA (official sources).
+ */
+const { getMedicineInfo } = require('../services/medicineInfoService');
+
+router.get('/medicine-info/:name', async (req, res) => {
+  const name = (req.params.name || '').trim();
+  if (!name) {
+    return res.status(400).json({ success: false, message: 'Medicine name is required' });
+  }
+
+  try {
+    const info = await getMedicineInfo(name);
+    if (!info) {
+      return res.status(404).json({
+        success: false,
+        message: `No information found for "${name}". It may not be in the FDA database.`
+      });
+    }
+    return res.status(200).json({ success: true, data: info });
+  } catch (err) {
+    console.error('Medicine info error:', err.message);
+    return res.status(500).json({ success: false, message: 'Failed to fetch medicine information' });
+  }
+});
+
+/**
  * GET /api/ai/health
  * Health check for AI service
  */
