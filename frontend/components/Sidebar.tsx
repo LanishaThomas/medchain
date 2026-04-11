@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
 /* ─── Types ─────────────────────────────────────────── */
@@ -52,14 +52,9 @@ const roleConfig: Record<UserRole, RoleConfig> = {
     label:      'Hospital Admin',
     badgeBg:    'bg-violet-100 text-violet-700',
     navItems: [
-      { name: 'Dashboard',      href: '/dashboard/hospital',             icon: <HomeIcon /> },
-      { name: 'Doctors',        href: '/dashboard/hospital/doctors',     icon: <UserCheckIcon /> },
-      { name: 'Staff',          href: '/dashboard/hospital/staff',       icon: <UsersIcon /> },
-      { name: 'Patients',       href: '/dashboard/hospital/patients',    icon: <PatientIcon /> },
-      { name: 'Reports',        href: '/dashboard/hospital/reports',     icon: <DocumentIcon /> },
-      { name: 'Emergency',      href: '/dashboard/hospital/emergency',   icon: <AlertIcon /> },
-      { name: 'Departments',    href: '/dashboard/hospital/departments', icon: <BuildingIcon /> },
-      { name: 'Settings',       href: '/dashboard/hospital/settings',    icon: <SettingsIcon /> },
+      { name: 'Dashboard',           href: '/dashboard/hospital',                       icon: <HomeIcon /> },
+      { name: 'Doctor Applications', href: '/dashboard/hospital?section=applications',  icon: <UserCheckIcon /> },
+      { name: 'Emergency Access',    href: '/dashboard/hospital?section=emergency',     icon: <AlertIcon /> },
     ],
   },
   doctor: {
@@ -70,14 +65,13 @@ const roleConfig: Record<UserRole, RoleConfig> = {
     label:      'Doctor',
     badgeBg:    'bg-blue-100 text-blue-700',
     navItems: [
-      { name: 'Dashboard',       href: '/dashboard/doctor',                icon: <HomeIcon /> },
-      { name: 'My Patients',     href: '/dashboard/doctor/patients',       icon: <PatientIcon /> },
-      { name: 'Appointments',    href: '/dashboard/doctor/appointments',   icon: <CalendarIcon /> },
-      { name: 'Diagnoses',       href: '/dashboard/doctor/diagnoses',      icon: <ClipboardIcon /> },
-      { name: 'Prescriptions',   href: '/dashboard/doctor/prescriptions',  icon: <PrescriptionIcon /> },
-      { name: 'Medical Records', href: '/dashboard/doctor/records',        icon: <DocumentIcon /> },
-      { name: 'Messages',        href: '/dashboard/doctor/messages',       icon: <MessageIcon /> },
-      { name: 'Profile',         href: '/dashboard/doctor/profile',        icon: <UserIcon /> },
+      { name: 'Dashboard',       href: '/dashboard/doctor',                              icon: <HomeIcon /> },
+      { name: 'Appointments',    href: '/dashboard/doctor?section=appointments',         icon: <CalendarIcon /> },
+      { name: 'Prescriptions',   href: '/dashboard/doctor?section=prescriptions',        icon: <PrescriptionIcon /> },
+      { name: 'Patient Records', href: '/dashboard/doctor?section=patient-records',      icon: <DocumentIcon /> },
+      { name: 'Request Access',  href: '/dashboard/doctor?section=request-access',       icon: <ShieldIcon /> },
+      { name: 'Hospital Apps',   href: '/dashboard/doctor?section=applications',         icon: <BuildingIcon /> },
+      { name: 'Profile',         href: '/dashboard/doctor?section=profile',              icon: <UserIcon /> },
     ],
   },
   patient: {
@@ -88,32 +82,15 @@ const roleConfig: Record<UserRole, RoleConfig> = {
     label:      'Patient',
     badgeBg:    'bg-green-100 text-green-700',
     navItems: [
-      { name: 'Dashboard',      href: '/dashboard/patient',               icon: <HomeIcon /> },
-      { name: 'My Records',     href: '/dashboard/patient/records',       icon: <DocumentIcon /> },
-      { name: 'Appointments',   href: '/dashboard/patient/appointments',  icon: <CalendarIcon /> },
-      { name: 'Prescriptions',  href: '/dashboard/patient/prescriptions', icon: <PrescriptionIcon /> },
-      { name: 'Access Control', href: '/dashboard/patient/access',        icon: <ShieldIcon /> },
-      { name: 'Emergency QR',   href: '/dashboard/patient/emergency-qr', icon: <QRIcon /> },
-      { name: 'AI Health Bot',  href: '/dashboard/patient/ai-chat',       icon: <BotIcon /> },
-      { name: 'Mental Health',  href: '/dashboard/patient/mental-health', icon: <HeartIcon /> },
-      { name: 'Caregivers',     href: '/dashboard/patient/caregivers',    icon: <CaregiverIcon /> },
-      { name: 'Profile',        href: '/dashboard/patient/profile',       icon: <UserIcon /> },
-    ],
-  },
-  caregiver: {
-    gradient:   'from-purple-500 to-fuchsia-600',
-    accentBg:   'bg-purple-50',
-    accentText: 'text-purple-700',
-    accentIcon: 'text-purple-600',
-    label:      'Caregiver',
-    badgeBg:    'bg-purple-100 text-purple-700',
-    navItems: [
-      { name: 'Dashboard',       href: '/dashboard/caregiver',              icon: <HomeIcon /> },
-      { name: 'Patient Records', href: '/dashboard/caregiver/records',      icon: <DocumentIcon /> },
-      { name: 'Appointments',    href: '/dashboard/caregiver/appointments', icon: <CalendarIcon /> },
-      { name: 'Medications',     href: '/dashboard/caregiver/medications',  icon: <PrescriptionIcon /> },
-      { name: 'Emergency Info',  href: '/dashboard/caregiver/emergency',    icon: <AlertIcon /> },
-      { name: 'Profile',         href: '/dashboard/caregiver/profile',      icon: <UserIcon /> },
+      { name: 'Dashboard',      href: '/dashboard/patient',                       icon: <HomeIcon /> },
+      { name: 'My Records',     href: '/dashboard/patient?section=records',       icon: <DocumentIcon /> },
+      { name: 'Appointments',   href: '/dashboard/patient?section=appointments',  icon: <CalendarIcon /> },
+      { name: 'Prescriptions',  href: '/dashboard/patient?section=prescriptions', icon: <PrescriptionIcon /> },
+      { name: 'Access Control', href: '/dashboard/patient?section=permissions',   icon: <ShieldIcon /> },
+      { name: 'Emergency QR',   href: '/dashboard/patient?section=emergency',     icon: <QRIcon /> },
+      { name: 'AI Health Bot',  href: '/chatbot',                                 icon: <BotIcon /> },
+      { name: 'Mental Health',  href: '/dashboard/patient?section=mental-health', icon: <HeartIcon /> },
+      { name: 'Profile',        href: '/dashboard/patient?section=profile',       icon: <UserIcon /> },
     ],
   },
 };
@@ -135,6 +112,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const sidebarRef = useRef<HTMLElement>(null);
 
   // Close mobile sidebar on route change
@@ -246,7 +224,18 @@ export default function Sidebar({
         {/* ── Navigation ──────────────────────────── */}
         <nav className="flex-1 overflow-y-auto sidebar-nav px-3 py-2 space-y-0.5">
           {config.navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const active = (() => {
+              if (item.href.includes('?section=')) {
+                const [hrefPath, hrefQuery] = item.href.split('?');
+                const hrefSection = new URLSearchParams(hrefQuery).get('section');
+                return pathname === hrefPath && searchParams.get('section') === hrefSection;
+              }
+              const dashRoots = ['/dashboard/patient', '/dashboard/doctor', '/dashboard/hospital'];
+              if (dashRoots.includes(item.href)) {
+                return pathname === item.href && !searchParams.get('section');
+              }
+              return pathname === item.href || pathname.startsWith(item.href + '/');
+            })();
             return (
               <Link
                 key={item.name}
@@ -257,20 +246,20 @@ export default function Sidebar({
                   'group flex items-center gap-3 px-3 py-2.5 rounded-xl',
                   'text-sm font-medium',
                   'transition-all duration-150 ease-in-out relative',
-                  isActive
+                  active
                     ? `${config.accentBg} ${config.accentText} shadow-sm`
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                 ].join(' ')}
               >
                 {/* Active indicator bar */}
-                {isActive && (
+                {active && (
                   <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-gradient-to-b ${config.gradient}`} />
                 )}
 
                 {/* Icon */}
                 <span className={[
                   'w-5 h-5 flex-shrink-0 transition-colors duration-150',
-                  isActive ? config.accentIcon : 'text-slate-400 group-hover:text-slate-600',
+                  active ? config.accentIcon : 'text-slate-400 group-hover:text-slate-600',
                 ].join(' ')}>
                   {item.icon}
                 </span>
