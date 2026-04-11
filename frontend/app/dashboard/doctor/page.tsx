@@ -159,101 +159,65 @@ export default function DoctorDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header with logout */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Doctor Dashboard</h1>
-            <p className="text-gray-600">Welcome, Dr. {user?.lastName || user?.firstName}</p>
+    <div className="theme-doctor min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 animate-fade-in">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* ─── Page Header ─────────────────────────────── */}
+        <div className="role-header">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Doctor Dashboard</h1>
+              <p className="text-white/75 text-sm mt-1">
+                Welcome back, <span className="font-semibold text-white">Dr. {user?.lastName || user?.firstName}</span>
+              </p>
+            </div>
+            <button
+              id="doctor-logout-btn"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white/20 hover:bg-white/30 disabled:opacity-50
+                         text-white text-sm font-semibold rounded-xl border border-white/30
+                         transition-all duration-200 backdrop-blur-sm"
+            >
+              {loggingOut ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Logging out…
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign out
+                </>
+              )}
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-medium flex items-center gap-2"
-          >
-            {loggingOut ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Logging out...
-              </>
-            ) : (
-              <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                Logout
-              </>
-            )}
-          </button>
         </div>
 
-        {/* Tabs */}
-        <div className="mb-8 border-b border-gray-200">
-          <div className="flex gap-4">
-            <button
-              onClick={() => setActiveTab('applications')}
-              className={`px-4 py-3 font-medium border-b-2 transition ${
-                activeTab === 'applications'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              🏥 Hospital Applications
-            </button>
-            <button
-              onClick={() => setActiveTab('appointments')}
-              className={`px-4 py-3 font-medium border-b-2 transition ${
-                activeTab === 'appointments'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              📅 Appointments
-            </button>
-            <button
-              onClick={() => setActiveTab('prescriptions')}
-              className={`px-4 py-3 font-medium border-b-2 transition ${
-                activeTab === 'prescriptions'
-                  ? 'border-purple-600 text-purple-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              💊 Prescriptions
-            </button>
-            <button
-              onClick={() => setActiveTab('patient-records')}
-              className={`px-4 py-3 font-medium border-b-2 transition ${
-                activeTab === 'patient-records'
-                  ? 'border-green-600 text-green-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              📁 Patient Records
-            </button>
-            <button
-              onClick={() => setActiveTab('request-access')}
-              className={`px-4 py-3 font-medium border-b-2 transition ${
-                activeTab === 'request-access'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              🔑 Request Patient Access
-            </button>
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`px-4 py-3 font-medium border-b-2 transition ${
-                activeTab === 'profile'
-                  ? 'border-purple-600 text-purple-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              👤 Profile
-            </button>
+        {/* ─── Tab Navigation ───────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-soft p-2">
+          <div className="flex gap-1 flex-wrap">
+            {([
+              { id: 'applications',   label: 'Hospital Applications', emoji: '🏥' },
+              { id: 'appointments',   label: 'Appointments',          emoji: '📅' },
+              { id: 'prescriptions',  label: 'Prescriptions',         emoji: '💊' },
+              { id: 'patient-records',label: 'Patient Records',       emoji: '📁' },
+              { id: 'request-access', label: 'Request Access',        emoji: '🔑' },
+              { id: 'profile',        label: 'Profile',               emoji: '👤' },
+            ] as const).map((tab) => (
+              <button
+                key={tab.id}
+                id={`tab-${tab.id}`}
+                onClick={() => setActiveTab(tab.id)}
+                className={`tab-btn ${ activeTab === tab.id ? 'tab-btn-active' : '' }`}
+              >
+                <span className="mr-1.5">{tab.emoji}</span>{tab.label}
+              </button>
+            ))}
           </div>
         </div>
         
@@ -293,30 +257,27 @@ export default function DoctorDashboard() {
           </div>
         )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Appointments</h2>
-            <p className="text-3xl font-bold text-blue-600">{stats.appointments}</p>
-            <p className="text-sm text-gray-500">Today</p>
+        {/* ─── Stats ─────────────────────────────────── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="stat-card">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Appointments</p>
+            <p className="text-3xl font-bold text-role-primary">{stats.appointments}</p>
+            <p className="text-xs text-slate-400 mt-1">Today</p>
           </div>
-          
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Patients</h2>
-            <p className="text-3xl font-bold text-green-600">{stats.patients}</p>
-            <p className="text-sm text-gray-500">Active</p>
+          <div className="stat-card">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Patients</p>
+            <p className="text-3xl font-bold text-role-primary">{stats.patients}</p>
+            <p className="text-xs text-slate-400 mt-1">Active</p>
           </div>
-          
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Prescriptions</h2>
-            <p className="text-3xl font-bold text-purple-600">{stats.prescriptions}</p>
-            <p className="text-sm text-gray-500">This week</p>
+          <div className="stat-card">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Prescriptions</p>
+            <p className="text-3xl font-bold text-role-dark">{stats.prescriptions}</p>
+            <p className="text-xs text-slate-400 mt-1">This week</p>
           </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Hospitals</h2>
-            <p className="text-3xl font-bold text-indigo-600">{approvalData?.summary.approved || 0}</p>
-            <p className="text-sm text-gray-500">Approved</p>
+          <div className="stat-card">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Hospitals</p>
+            <p className="text-3xl font-bold text-role-primary">{approvalData?.summary.approved || 0}</p>
+            <p className="text-xs text-slate-400 mt-1">Approved</p>
           </div>
         </div>
 

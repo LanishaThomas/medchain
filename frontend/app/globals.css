@@ -2,38 +2,304 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════
+   ROLE-BASED CSS CUSTOM PROPERTIES
+   Applied at the page root: .theme-patient / .theme-doctor / .theme-hospital
+   Every themed component reads from these variables.
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* Fallback / default (neutral indigo) */
+  --role-primary:      #4f46e5;
+  --role-primary-hover:#4338ca;
+  --role-dark:         #3730a3;
+  --role-light:        #eef2ff;
+  --role-subtle:       #f5f3ff;
+  --role-border:       #a5b4fc;
+  --role-muted:        #818cf8;
+  --role-text:         #4338ca;
+  --role-text-light:   #c7d2fe;
+  --role-gradient-from:#6366f1;
+  --role-gradient-to:  #4f46e5;
+}
+
+/* ── Patient · Green ──────────────────────────────────── */
+.theme-patient {
+  --role-primary:      #16A34A;
+  --role-primary-hover:#15803D;
+  --role-dark:         #166534;
+  --role-light:        #DCFCE7;
+  --role-subtle:       #F0FDF4;
+  --role-border:       #86EFAC;
+  --role-muted:        #4ADE80;
+  --role-text:         #166534;
+  --role-text-light:   #BBF7D0;
+  --role-gradient-from:#16A34A;
+  --role-gradient-to:  #15803D;
+}
+
+/* ── Doctor · Blue ───────────────────────────────────── */
+.theme-doctor {
+  --role-primary:      #2563EB;
+  --role-primary-hover:#1D4ED8;
+  --role-dark:         #1E3A8A;
+  --role-light:        #DBEAFE;
+  --role-subtle:       #EFF6FF;
+  --role-border:       #93C5FD;
+  --role-muted:        #60A5FA;
+  --role-text:         #1E3A8A;
+  --role-text-light:   #BFDBFE;
+  --role-gradient-from:#2563EB;
+  --role-gradient-to:  #1D4ED8;
+}
+
+/* ── Hospital · Purple ───────────────────────────────── */
+.theme-hospital {
+  --role-primary:      #7C3AED;
+  --role-primary-hover:#6D28D9;
+  --role-dark:         #4C1D95;
+  --role-light:        #EDE9FE;
+  --role-subtle:       #F5F3FF;
+  --role-border:       #C4B5FD;
+  --role-muted:        #A78BFA;
+  --role-text:         #4C1D95;
+  --role-text-light:   #DDD6FE;
+  --role-gradient-from:#7C3AED;
+  --role-gradient-to:  #6D28D9;
+}
+
+/* ═══════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════ */
 @layer base {
   html {
     scroll-behavior: smooth;
   }
+
   body {
-    @apply text-gray-900 bg-white;
+    @apply text-gray-900 bg-slate-50 antialiased;
+    font-family: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
   }
 }
 
+/* ═══════════════════════════════════════════════════════
+   COMPONENT LAYER
+   ═══════════════════════════════════════════════════════ */
 @layer components {
+
+  /* ── Buttons ─────────────────────────────────────────── */
   .btn-primary {
-    @apply inline-flex items-center justify-center px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors duration-200;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5
+           text-white text-sm font-semibold rounded-xl
+           shadow-sm hover:shadow-md
+           transition-all duration-200 ease-in-out
+           focus:outline-none focus:ring-2 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: var(--role-primary);
   }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--role-primary-hover);
+  }
+  .btn-primary:focus {
+    --tw-ring-color: var(--role-primary);
+  }
+
   .btn-secondary {
-    @apply inline-flex items-center justify-center px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold rounded-lg transition-colors duration-200;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5
+           bg-white hover:bg-gray-50 active:bg-gray-100
+           text-gray-700 text-sm font-semibold rounded-xl
+           border border-gray-200 hover:border-gray-300
+           shadow-sm hover:shadow
+           transition-all duration-200 ease-in-out
+           focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
   }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5
+           bg-red-600 hover:bg-red-700 active:bg-red-800
+           text-white text-sm font-semibold rounded-xl
+           shadow-sm hover:shadow-md
+           transition-all duration-200 ease-in-out
+           focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* ── Cards ───────────────────────────────────────────── */
   .card {
-    @apply bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 p-6;
+    @apply bg-white rounded-2xl border border-gray-100
+           shadow-sm hover:shadow-md
+           transition-shadow duration-200 p-6;
   }
+
+  .card-compact {
+    @apply bg-white rounded-2xl border border-gray-100
+           shadow-sm hover:shadow-md
+           transition-shadow duration-200 p-4;
+  }
+
+  /* Themed card — light tinted bg + role-coloured left accent */
+  .card-themed {
+    @apply rounded-2xl border-l-4 shadow-sm hover:shadow-md
+           transition-all duration-200 p-5;
+    background-color: var(--role-subtle);
+    border-left-color: var(--role-primary);
+    border-top-color: transparent;
+    border-right-color: transparent;
+    border-bottom-color: transparent;
+  }
+
+  /* Stat card — role-coloured top accent bar */
+  .stat-card {
+    @apply bg-white rounded-2xl border border-gray-100
+           shadow-sm hover:shadow-md hover:-translate-y-0.5
+           transition-all duration-200 p-5
+           relative overflow-hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--role-gradient-from), var(--role-gradient-to));
+    border-radius: 9999px;
+  }
+
+  /* ── Inputs ──────────────────────────────────────────── */
   .input-field {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all duration-200;
+    @apply w-full px-4 py-2.5
+           border border-gray-200 rounded-xl
+           bg-white text-sm text-gray-900
+           placeholder:text-gray-400
+           outline-none transition-all duration-200
+           disabled:bg-gray-50 disabled:cursor-not-allowed;
   }
+  .input-field:focus {
+    border-color: var(--role-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--role-primary) 15%, transparent);
+  }
+
+  /* ── Badges ──────────────────────────────────────────── */
   .badge {
-    @apply inline-block px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium;
+    @apply inline-flex items-center px-2.5 py-0.5
+           rounded-full text-xs font-semibold;
+    background-color: var(--role-light);
+    color:            var(--role-text);
   }
-  .badge-success {
-    @apply bg-green-100 text-green-800;
+
+  .badge-success { @apply bg-emerald-50 text-emerald-700; }
+  .badge-warning { @apply bg-amber-50   text-amber-700;   }
+  .badge-danger  { @apply bg-red-50     text-red-700;     }
+  .badge-info    { @apply bg-sky-50     text-sky-700;     }
+
+  /* ── Page sections ───────────────────────────────────── */
+  .page-section {
+    @apply bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden;
   }
-  .badge-warning {
-    @apply bg-yellow-100 text-yellow-800;
+
+  .section-header {
+    @apply px-6 py-4 border-b border-gray-100 flex items-center justify-between;
   }
-  .badge-danger {
-    @apply bg-red-100 text-red-800;
+
+  /* ── Sidebar ─────────────────────────────────────────── */
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl
+           text-sm font-medium text-slate-600
+           hover:bg-slate-100 hover:text-slate-900
+           transition-all duration-150 ease-in-out
+           cursor-pointer select-none;
+  }
+
+  .sidebar-item-active {
+    font-weight: 600;
+    color:            var(--role-text);
+    background-color: var(--role-light);
+  }
+
+  .sidebar-icon {
+    @apply w-5 h-5 flex-shrink-0;
+  }
+
+  /* ── Tab navigation ──────────────────────────────────── */
+  .tab-btn {
+    @apply px-4 py-2.5 text-sm font-medium rounded-xl
+           transition-all duration-150 whitespace-nowrap
+           text-gray-500 hover:text-gray-800 hover:bg-gray-100;
+  }
+
+  /* Active tab uses the role colour via CSS vars */
+  .tab-btn-active {
+    @apply text-white shadow-sm;
+    background-color: var(--role-primary);
+  }
+  .tab-btn-active:hover {
+    background-color: var(--role-primary-hover);
+    @apply text-white;
+  }
+
+  /* ── Role-themed gradient header ─────────────────────── */
+  .role-header {
+    @apply rounded-2xl p-6 text-white;
+    background: linear-gradient(135deg, var(--role-gradient-from) 0%, var(--role-gradient-to) 100%);
+    box-shadow: 0 8px 32px -8px color-mix(in srgb, var(--role-primary) 40%, transparent);
+  }
+
+  /* ── Themed text helpers ─────────────────────────────── */
+  .text-role-primary { color: var(--role-primary); }
+  .text-role-dark    { color: var(--role-dark);    }
+  .text-role-light   { color: var(--role-text-light); }
+
+  /* ── Themed bg helpers ───────────────────────────────── */
+  .bg-role-subtle  { background-color: var(--role-subtle); }
+  .bg-role-light   { background-color: var(--role-light);  }
+  .bg-role-primary { background-color: var(--role-primary); }
+
+  /* ── Themed border helpers ───────────────────────────── */
+  .border-role { border-color: var(--role-border); }
+
+  /* ── Active nav indicator bar ────────────────────────── */
+  .role-nav-active-bar {
+    @apply absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full;
+    background: linear-gradient(to bottom, var(--role-gradient-from), var(--role-gradient-to));
   }
 }
+
+/* ═══════════════════════════════════════════════════════
+   CUSTOM SCROLLBAR
+   ═══════════════════════════════════════════════════════ */
+.sidebar-nav::-webkit-scrollbar        { width: 4px; }
+.sidebar-nav::-webkit-scrollbar-track  { background: transparent; }
+.sidebar-nav::-webkit-scrollbar-thumb  { background: #e2e8f0; border-radius: 4px; }
+.sidebar-nav::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+
+/* ═══════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════ */
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+@keyframes pulse-role {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--role-primary) 30%, transparent); }
+  50%       { box-shadow: 0 0 0 8px color-mix(in srgb, var(--role-primary) 0%,  transparent); }
+}
+
+.animate-slide-in-left { animation: slide-in-left 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-fade-in        { animation: fade-in 0.22s ease-out forwards; }
+.animate-pulse-role     { animation: pulse-role 2s ease-in-out infinite; }
