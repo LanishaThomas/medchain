@@ -108,6 +108,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve audio files as static assets
+app.use('/audio', express.static(require('path').join(__dirname, 'uploads/audio'), {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  }
+}));
+
 // Request logging (development)
 if (process.env.NODE_ENV !== 'production') {
   app.use((req, res, next) => {

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, isPatient } = require('../middleware/authMiddleware');
-const { MoodEntry } = require('../models');
+const { MoodEntry, GratitudeJournal } = require('../models');
 
 // All routes require authentication and patient role
 router.use(protect);
@@ -166,6 +166,81 @@ router.delete('/mood/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete mood entry',
+      error: error.message
+    });
+  }
+});
+
+// ─── Gratitude Journal ──────────────────────────────────────────────────────
+
+// @route   POST /api/patient/gratitude
+// @desc    Save a gratitude journal entry
+// @access  Private (Patient only)
+router.post('/gratitude', async (req, res) => {
+  try {
+    const { entries } = req.body;
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'entries must be a non-empty array'
+      });
+    }
+
+    const validEntries = entries.map(e => String(e).trim()).filter(Boolean);
+    if (validEntries.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please add at least one thing you are grateful for'
+      });
+    }
+
+    const journal = await GratitudeJournal.create({
+      patient: req.user.id,
+      entries: validEntries
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Gratitude journal saved',
+      data: {
+        id: journal._id,
+        entries: journal.entries,
+        createdAt: journal.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Error saving gratitude journal:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save gratitude journal',
+      error: error.message
+    });
+  }
+});
+
+// @route   GET /api/patient/gratitude
+// @desc    Get all gratitude journal entries for the patient
+// @access  Private (Patient only)
+router.get('/gratitude', async (req, res) => {
+  try {
+    const journals = await GratitudeJournal.find({ patient: req.user.id })
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    res.status(200).json({
+      success: true,
+      data: journals.map(j => ({
+        id: j._id,
+        entries: j.entries,
+        createdAt: j.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching gratitude journals:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch gratitude journals',
       error: error.message
     });
   }

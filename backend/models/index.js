@@ -10,5 +10,6 @@ module.exports = {
   VersionHistory: require('./VersionHistory'),
   EmergencyAccessLog: require('./EmergencyAccessLog'),
   Notification: require('./Notification'),
-  MoodEntry: require('./MoodEntry')
+  MoodEntry: require('./MoodEntry'),
+  GratitudeJournal: require('./GratitudeJournal')
 };
