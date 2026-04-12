@@ -12,6 +12,12 @@ interface MoodEntry {
   createdAt: string;
 }
 
+interface GratitudeJournalEntry {
+  id: string;
+  entries: string[];
+  createdAt: string;
+}
+
 interface BreathingPattern {
   id: string;
   name: string;
@@ -30,6 +36,7 @@ interface MusicTrack {
   category: 'meditation' | 'stress-relief' | 'sleep' | 'focus';
   description: string;
   icon: string;
+  audioFile: string; // filename in backend/uploads/audio/
 }
 
 const breathingPatterns: BreathingPattern[] = [
@@ -70,62 +77,73 @@ const breathingPatterns: BreathingPattern[] = [
   }
 ];
 
+// Base URL for audio files served from backend
+const AUDIO_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace('/api', '');
+
 const musicTracks: MusicTrack[] = [
   { 
     id: 'rain', 
     title: 'Peaceful Rain', 
     category: 'stress-relief',
     description: 'Gentle rain sounds for relaxation',
-    icon: '🌧️'
+    icon: '🌧️',
+    audioFile: 'rain.mp3'
   },
   { 
     id: 'ocean', 
     title: 'Ocean Waves', 
     category: 'meditation',
     description: 'Calming ocean waves',
-    icon: '🌊'
+    icon: '🌊',
+    audioFile: 'ocean.mp3'
   },
   { 
     id: 'forest', 
     title: 'Forest Birds', 
     category: 'focus',
     description: 'Natural forest ambience',
-    icon: '🐦'
+    icon: '🐦',
+    audioFile: 'forest.mp3'
   },
   { 
     id: 'crickets', 
     title: 'Night Crickets', 
     category: 'sleep',
     description: 'Peaceful cricket sounds for sleep',
-    icon: '🦗'
+    icon: '🦗',
+    audioFile: 'crickets.mp3'
   },
   { 
     id: 'bowls', 
     title: 'Tibetan Bowls', 
     category: 'meditation',
     description: 'Healing bowl sounds',
-    icon: '🔔'
+    icon: '🔔',
+    audioFile: 'bowls.mp3'
   },
   { 
     id: 'piano', 
     title: 'Gentle Piano', 
     category: 'stress-relief',
     description: 'Soft piano melodies',
-    icon: '🎹'
+    icon: '🎹',
+    audioFile: 'piano.mp3'
   },
   { 
     id: 'whitenoise', 
     title: 'White Noise', 
     category: 'sleep',
     description: 'Pure white noise for deep sleep',
-    icon: '💤'
+    icon: '💤',
+    audioFile: 'whitenoise.mp3'
   },
   { 
     id: 'fireplace', 
     title: 'Fireplace Crackle', 
     category: 'stress-relief',
     description: 'Cozy fireplace sounds',
-    icon: '🔥'
+    icon: '🔥',
+    audioFile: 'fireplace.mp3'
   }
 ];
 
@@ -147,7 +165,6 @@ export default function MentalHealthComponent() {
   const [savingMood, setSavingMood] = useState(false);
   
   // Breathing exercise state
-  const [showBreathingModal, setShowBreathingModal] = useState(false);
   const [showBreathingExercise, setShowBreathingExercise] = useState(false);
   const [selectedBreathingPattern, setSelectedBreathingPattern] = useState<BreathingPattern | null>(null);
   const [breathingPhase, setBreathingPhase] = useState<'inhale' | 'hold' | 'exhale' | 'holdAfterExhale'>('inhale');
@@ -157,7 +174,6 @@ export default function MentalHealthComponent() {
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Music player state
-  const [showMusicModal, setShowMusicModal] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<MusicTrack | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [musicCategory, setMusicCategory] = useState<'all' | 'meditation' | 'stress-relief' | 'sleep' | 'focus'>('all');
@@ -166,14 +182,30 @@ export default function MentalHealthComponent() {
   // Gratitude journal state
   const [showGratitudeModal, setShowGratitudeModal] = useState(false);
   const [gratitudeEntries, setGratitudeEntries] = useState<string[]>(['', '', '']);
+  const [journalList, setJournalList] = useState<GratitudeJournalEntry[]>([]);
+  const [currentPage, setCurrentPage] = useState(0); // 0 = write-new page
+  const [savingGratitude, setSavingGratitude] = useState(false);
+  const [pageFlipping, setPageFlipping] = useState(false);
 
   useEffect(() => {
     fetchMoodHistory();
+    fetchGratitudeJournals();
     return () => {
       stopBreathingExercise();
       stopMusic();
     };
   }, []);
+
+  const fetchGratitudeJournals = async () => {
+    try {
+      const response = await authService.client.get('/patient/gratitude');
+      if (response.data.success) {
+        setJournalList(response.data.data);
+      }
+    } catch (err) {
+      console.log('Gratitude fetch error:', err);
+    }
+  };
 
   const fetchMoodHistory = async () => {
     try {
@@ -230,7 +262,7 @@ export default function MentalHealthComponent() {
   // Breathing Exercise Functions
   const startBreathingPattern = (pattern: BreathingPattern) => {
     setSelectedBreathingPattern(pattern);
-    setShowBreathingModal(false);
+    // setShowBreathingModal no longer needed since patterns are inline
     setShowBreathingExercise(true);
     setBreathingCount(0);
     setBreathingPhase('inhale');
@@ -308,76 +340,41 @@ export default function MentalHealthComponent() {
     setSelectedBreathingPattern(null);
   };
 
-  // Music/Sound Functions - Generate calming ambient sounds using Web Audio API
+  // Music/Sound Functions - Play real MP3 files from backend
   const playMusic = (track: MusicTrack) => {
-    stopMusic();
+    // If same track is already loaded, just resume
+    if (audioRef.current && currentTrack?.id === track.id) {
+      audioRef.current.play().catch(console.error);
+      setIsPlaying(true);
+      return;
+    }
+    // Stop any existing audio first
+    stopMusic(false);
     setCurrentTrack(track);
-    
+
     try {
-      // Create audio context
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // Create different sound generators based on track
-      if (track.id === 'rain') {
-        // Rain sound using pink noise
-        const bufferSize = 4096;
-        const whiteNoise = audioContext.createScriptProcessor(bufferSize, 1, 1);
-        const b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-        
-        whiteNoise.onaudioprocess = function(e) {
-          const output = e.outputBuffer.getChannelData(0);
-          for (let i = 0; i < bufferSize; i++) {
-            const white = Math.random() * 2 - 1;
-            const pink = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.1) / 7;
-            output[i] = pink * 0.1;
-          }
-        };
-        
-        const gainNode = audioContext.createGain();
-        gainNode.gain.value = 0.3;
-        
-        whiteNoise.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        // Store reference
-        (audioRef as any).current = { context: audioContext, processor: whiteNoise };
-        
-      } else if (track.id === 'ocean') {
-        // Ocean waves using oscillating low frequency
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        const filter = audioContext.createBiquadFilter();
-        
-        oscillator.type = 'sine';
-        oscillator.frequency.value = 0.2;
-        filter.type = 'lowpass';
-        filter.frequency.value = 200;
-        
-        gainNode.gain.value = 0.2;
-        
-        oscillator.connect(filter);
-        filter.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        oscillator.start();
-        
-        (audioRef as any).current = { context: audioContext, oscillator, gainNode };
-        
-      } else {
-        // Default ambient tone
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.type = 'sine';
-        oscillator.frequency.value = 200;
-        gainNode.gain.value = 0.1;
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        oscillator.start();
-        
-        (audioRef as any).current = { context: audioContext, oscillator };
-      }
-      
+      const audioUrl = `${AUDIO_BASE_URL}/audio/${track.audioFile}`;
+      const audio = new Audio(audioUrl);
+      audio.loop = true;  // Loop until user pauses
+      audio.volume = 0.7;
+
+      audio.onerror = () => {
+        console.error(`Audio file not found: ${track.audioFile}`);
+        setIsPlaying(false);
+        setCurrentTrack(null);
+        alert(`Audio file "${track.audioFile}" not found. Please add it to backend/uploads/audio/`);
+      };
+
+      audio.oncanplaythrough = () => {
+        audio.play().catch((err) => {
+          console.error('Playback failed:', err);
+          setIsPlaying(false);
+          setCurrentTrack(null);
+        });
+      };
+
+      audioRef.current = audio;
+      audio.load();
       setIsPlaying(true);
     } catch (err) {
       console.error('Audio error:', err);
@@ -385,39 +382,53 @@ export default function MentalHealthComponent() {
     }
   };
 
-  const stopMusic = () => {
-    const audioObj = (audioRef as any).current;
-    if (audioObj) {
-      if (audioObj.oscillator) {
-        audioObj.oscillator.stop();
-        audioObj.oscillator.disconnect();
-      }
-      if (audioObj.processor) {
-        audioObj.processor.disconnect();
-      }
-      if (audioObj.gainNode) {
-        audioObj.gainNode.disconnect();
-      }
-      if (audioObj.context) {
-        audioObj.context.close();
-      }
-      (audioRef as any).current = null;
+  const pauseMusic = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
     }
     setIsPlaying(false);
-    setCurrentTrack(null);
   };
 
-  const saveGratitudeJournal = () => {
-    const validEntries = gratitudeEntries.filter(e => e.trim());
-    if (validEntries.length === 0) {
+  const resumeMusic = () => {
+    if (audioRef.current) {
+      audioRef.current.play().catch(console.error);
+      setIsPlaying(true);
+    }
+  };
+
+  // Fully stop and clear the track
+  const stopMusic = (clearTrack = true) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setIsPlaying(false);
+    if (clearTrack) setCurrentTrack(null);
+  };
+
+  const saveGratitudeJournal = async () => {
+    const valid = gratitudeEntries.map(e => e.trim()).filter(Boolean);
+    if (valid.length === 0) {
       alert('Please add at least one thing you\'re grateful for');
       return;
     }
-    
-    console.log('Gratitude entries saved:', validEntries);
-    setShowGratitudeModal(false);
-    setGratitudeEntries(['', '', '']);
-    alert('Gratitude journal saved! 🙏');
+    setSavingGratitude(true);
+    try {
+      const response = await authService.client.post('/patient/gratitude', { entries: valid });
+      if (response.data.success) {
+        const saved = response.data.data;
+        setJournalList(prev => [saved, ...prev]);
+        setGratitudeEntries(['', '', '']);
+        // Flip to the newly saved page (index 1 = first saved entry)
+        setCurrentPage(1);
+      }
+    } catch (err) {
+      console.error('Failed to save gratitude journal:', err);
+      alert('Failed to save. Please try again.');
+    } finally {
+      setSavingGratitude(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -477,85 +488,143 @@ export default function MentalHealthComponent() {
             </div>
           </button>
 
-          {/* Wellness Activities */}
+          {/* Breathing Exercises — inline cards */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">🌿 Wellness Activities</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Breathing Exercises */}
-              <button
-                onClick={() => setShowBreathingModal(true)}
-                className="p-5 text-left border-2 border-blue-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all group"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-3xl">🌬️</span>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 group-hover:text-blue-600">Breathing Exercises</h4>
-                    <p className="text-sm text-gray-600 mt-1">{breathingPatterns.length} patterns available</p>
-                  </div>
-                </div>
-              </button>
-
-              {/* Calming Sounds */}
-              <button
-                onClick={() => setShowMusicModal(true)}
-                className="p-5 text-left border-2 border-purple-200 rounded-xl hover:bg-purple-50 hover:border-purple-300 transition-all group"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-3xl">🎵</span>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 group-hover:text-purple-600">Calming Sounds</h4>
-                    <p className="text-sm text-gray-600 mt-1">{musicTracks.length} ambient tracks</p>
-                  </div>
-                </div>
-              </button>
-
-              {/* Gratitude Journal */}
-              <button
-                onClick={() => setShowGratitudeModal(true)}
-                className="p-5 text-left border-2 border-green-200 rounded-xl hover:bg-green-50 hover:border-green-300 transition-all group"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-3xl">🙏</span>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 group-hover:text-green-600">Gratitude Journal</h4>
-                    <p className="text-sm text-gray-600 mt-1">List 3 things you're grateful for</p>
-                  </div>
-                </div>
-              </button>
-
-              {/* Body Scan Meditation */}
-              <button
-                onClick={() => alert('Body scan meditation coming soon!')}
-                className="p-5 text-left border-2 border-orange-200 rounded-xl hover:bg-orange-50 hover:border-orange-300 transition-all group"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-3xl">🧘</span>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 group-hover:text-orange-600">Body Scan</h4>
-                    <p className="text-sm text-gray-600 mt-1">Progressive relaxation technique</p>
-                  </div>
-                </div>
-              </button>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">🌬️ Breathing Exercises</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {breathingPatterns.map((pattern) => (
+                <button
+                  key={pattern.id}
+                  onClick={() => startBreathingPattern(pattern)}
+                  className={`p-4 text-left rounded-xl border-2 border-transparent bg-gradient-to-r ${pattern.color} bg-opacity-10 hover:shadow-md transition-all`}
+                  style={{ background: 'linear-gradient(135deg, #f0f9ff, #e0f2fe)' }}
+                >
+                  <h4 className="font-semibold text-gray-900 text-sm">{pattern.name}</h4>
+                  <p className="text-xs text-gray-500 mt-1">{pattern.description}</p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Inhale {pattern.inhale}s · Hold {pattern.hold}s · Exhale {pattern.exhale}s
+                    {pattern.holdAfterExhale > 0 && ` · Hold ${pattern.holdAfterExhale}s`} · {pattern.cycles} cycles
+                  </p>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Currently Playing */}
-          {currentTrack && isPlaying && (
+          {/* Calming Sounds — inline cards */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">🎵 Calming Sounds</h3>
+              {/* Category filter */}
+              <div className="flex flex-wrap gap-1.5">
+                {(['all', 'meditation', 'stress-relief', 'sleep', 'focus'] as const).map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setMusicCategory(cat)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
+                      musicCategory === cat
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {filteredMusic.map((track) => {
+                const isActive = currentTrack?.id === track.id;
+                return (
+                  <button
+                    key={track.id}
+                    onClick={() => {
+                      if (isActive) {
+                        isPlaying ? pauseMusic() : resumeMusic();
+                      } else {
+                        playMusic(track);
+                      }
+                    }}
+                    className={`p-3 text-left border-2 rounded-xl transition-all relative ${
+                      isActive
+                        ? 'border-purple-500 bg-purple-50'
+                        : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50'
+                    }`}
+                  >
+                    {isActive && (
+                      <span className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
+                        isPlaying ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'
+                      }`} />
+                    )}
+                    <span className="text-2xl mb-1 block">{track.icon}</span>
+                    <h4 className={`font-semibold text-xs leading-tight ${isActive ? 'text-purple-700' : 'text-gray-900'}`}>
+                      {track.title}
+                    </h4>
+                    {isActive && (
+                      <p className={`text-xs mt-1 font-medium ${isPlaying ? 'text-green-600' : 'text-yellow-600'}`}>
+                        {isPlaying ? '▶ Playing' : '⏸ Paused'}
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Gratitude Journal */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">🙏 Gratitude Journal</h3>
+            <button
+              onClick={() => setShowGratitudeModal(true)}
+              className="w-full p-4 text-left border-2 border-green-200 rounded-xl hover:bg-green-50 hover:border-green-300 transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">✍️</span>
+                <div>
+                  <h4 className="font-semibold text-gray-900 group-hover:text-green-600">Write Today's Gratitude</h4>
+                  <p className="text-sm text-gray-600 mt-1">List 3 things you're grateful for today</p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {/* Currently Playing / Paused */}
+          {currentTrack && (
             <div className="bg-white rounded-xl border border-purple-200 p-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-3xl">{currentTrack.icon}</span>
+                  <div className="relative">
+                    <span className="text-3xl">{currentTrack.icon}</span>
+                    {isPlaying && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse" />
+                    )}
+                  </div>
                   <div>
                     <h4 className="font-semibold text-gray-900">{currentTrack.title}</h4>
-                    <p className="text-sm text-gray-600">{currentTrack.description}</p>
+                    <p className="text-xs text-gray-500">
+                      {isPlaying ? '🎵 Playing — loops until paused' : '⏸ Paused'}
+                    </p>
                   </div>
                 </div>
-                <button
-                  onClick={stopMusic}
-                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                >
-                  Stop
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Pause / Resume toggle */}
+                  <button
+                    onClick={isPlaying ? pauseMusic : resumeMusic}
+                    className={`px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors ${
+                      isPlaying
+                        ? 'bg-yellow-500 hover:bg-yellow-600'
+                        : 'bg-green-500 hover:bg-green-600'
+                    }`}
+                  >
+                    {isPlaying ? '⏸ Pause' : '▶ Resume'}
+                  </button>
+                  {/* Stop completely */}
+                  <button
+                    onClick={() => stopMusic()}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium"
+                  >
+                    ■ Stop
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -658,36 +727,7 @@ export default function MentalHealthComponent() {
         </div>
       )}
 
-      {/* Breathing Pattern Selection Modal */}
-      {showBreathingModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">Choose a Breathing Pattern</h3>
-            <div className="space-y-3">
-              {breathingPatterns.map((pattern) => (
-                <button
-                  key={pattern.id}
-                  onClick={() => startBreathingPattern(pattern)}
-                  className={`w-full p-4 text-left rounded-xl border-2 hover:shadow-md transition-all bg-gradient-to-r ${pattern.color} bg-opacity-10 border-transparent hover:border-opacity-50`}
-                >
-                  <h4 className="font-semibold text-gray-900">{pattern.name}</h4>
-                  <p className="text-sm text-gray-600 mt-1">{pattern.description}</p>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Inhale: {pattern.inhale}s | Hold: {pattern.hold}s | Exhale: {pattern.exhale}s
-                    {pattern.holdAfterExhale > 0 && ` | Hold: ${pattern.holdAfterExhale}s`} × {pattern.cycles} cycles
-                  </p>
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setShowBreathingModal(false)}
-              className="mt-4 w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+
 
       {/* Breathing Exercise Modal */}
       {showBreathingExercise && selectedBreathingPattern && (
@@ -730,91 +770,165 @@ export default function MentalHealthComponent() {
         </div>
       )}
 
-      {/* Music Selection Modal */}
-      {showMusicModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">Calming Sounds & Music</h3>
-            
-            {/* Category Filter */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {(['all', 'meditation', 'stress-relief', 'sleep', 'focus'] as const).map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setMusicCategory(cat)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${
-                    musicCategory === cat
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              {filteredMusic.map((track) => (
-                <button
-                  key={track.id}
-                  onClick={() => playMusic(track)}
-                  className="p-4 text-left border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all"
-                >
-                  <span className="text-3xl mb-2 block">{track.icon}</span>
-                  <h4 className="font-semibold text-gray-900 text-sm">{track.title}</h4>
-                  <p className="text-xs text-gray-600 mt-1">{track.description}</p>
-                </button>
-              ))}
-            </div>
 
-            <button
-              onClick={() => setShowMusicModal(false)}
-              className="mt-4 w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Gratitude Journal Modal */}
+      {/* ── Gratitude Journal Book Modal ── */}
       {showGratitudeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">🙏 Gratitude Journal</h3>
-            <p className="text-sm text-gray-600 mb-4">List three things you're grateful for today</p>
-            
-            {gratitudeEntries.map((entry, index) => (
-              <div key={index} className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {index + 1}. I'm grateful for...
-                </label>
-                <input
-                  type="text"
-                  value={entry}
-                  onChange={(e) => {
-                    const newEntries = [...gratitudeEntries];
-                    newEntries[index] = e.target.value;
-                    setGratitudeEntries(newEntries);
-                  }}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
-                  placeholder="Type here..."
-                />
-              </div>
-            ))}
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="relative w-full max-w-2xl">
+            {/* Close button */}
+            <button
+              onClick={() => { setShowGratitudeModal(false); setGratitudeEntries(['', '', '']); setCurrentPage(0); }}
+              className="absolute -top-10 right-0 text-white/80 hover:text-white text-sm flex items-center gap-1"
+            >
+              ✕ Close
+            </button>
 
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => { setShowGratitudeModal(false); setGratitudeEntries(['', '', '']); }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            {/* Book container */}
+            <div
+              className="relative bg-amber-50 rounded-lg shadow-2xl overflow-hidden"
+              style={{
+                minHeight: '480px',
+                background: 'linear-gradient(135deg, #fefce8 0%, #fef3c7 50%, #fde68a 100%)',
+                boxShadow: '-8px 8px 24px rgba(0,0,0,0.4), 8px 8px 24px rgba(0,0,0,0.2)'
+              }}
+            >
+              {/* Book spine */}
+              <div
+                className="absolute left-0 top-0 bottom-0 w-6 rounded-l-lg"
+                style={{ background: 'linear-gradient(to right, #92400e, #b45309)' }}
+              />
+
+              {/* Page content */}
+              <div
+                className={`ml-6 p-8 transition-all duration-300 ${pageFlipping ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0'}`}
               >
-                Cancel
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6 pb-3 border-b-2 border-amber-300">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">📖</span>
+                    <div>
+                      <h3 className="text-lg font-bold text-amber-900">Gratitude Journal</h3>
+                      {currentPage === 0 ? (
+                        <p className="text-xs text-amber-700">Write today's entry</p>
+                      ) : (
+                        <p className="text-xs text-amber-700">
+                          {new Date(journalList[currentPage - 1]?.createdAt).toLocaleDateString('en-US', {
+                            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                          })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-xs text-amber-600 font-medium">
+                    Page {currentPage + 1} of {journalList.length + 1}
+                  </div>
+                </div>
+
+                {/* Page 0: Write new entry */}
+                {currentPage === 0 && (
+                  <div>
+                    <p className="text-sm text-amber-800 mb-5 italic">"Gratitude turns what we have into enough."</p>
+                    {gratitudeEntries.map((entry, index) => (
+                      <div key={index} className="mb-4">
+                        <label className="block text-sm font-semibold text-amber-900 mb-1">
+                          {index + 1}. I am grateful for...
+                        </label>
+                        <input
+                          type="text"
+                          value={entry}
+                          onChange={(e) => {
+                            const next = [...gratitudeEntries];
+                            next[index] = e.target.value;
+                            setGratitudeEntries(next);
+                          }}
+                          className="w-full px-3 py-2 bg-amber-100/60 border border-amber-300 rounded-lg text-amber-900 placeholder-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm"
+                          placeholder={`Thing ${index + 1}...`}
+                        />
+                      </div>
+                    ))}
+                    {/* Add more entries */}
+                    {gratitudeEntries.length < 6 && (
+                      <button
+                        onClick={() => setGratitudeEntries(prev => [...prev, ''])}
+                        className="text-sm text-amber-700 hover:text-amber-900 mb-4 underline"
+                      >+ Add another entry</button>
+                    )}
+                    <button
+                      onClick={saveGratitudeJournal}
+                      disabled={savingGratitude}
+                      className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white font-semibold rounded-lg transition-colors mt-2"
+                    >
+                      {savingGratitude ? 'Saving...' : '🙏 Save Today\'s Entry'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Past journal pages */}
+                {currentPage > 0 && journalList[currentPage - 1] && (
+                  <div>
+                    <p className="text-sm text-amber-800 mb-5 italic">"Gratitude makes sense of our past."</p>
+                    <ul className="space-y-3">
+                      {journalList[currentPage - 1].entries.map((entry, i) => (
+                        <li key={i} className="flex items-start gap-3">
+                          <span className="text-amber-500 font-bold text-lg leading-tight">{i + 1}.</span>
+                          <p className="text-amber-900 text-sm leading-relaxed">{entry}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Decorative lines */}
+              {[1,2,3,4,5,6].map(i => (
+                <div
+                  key={i}
+                  className="absolute left-14 right-6 border-b border-amber-200/60"
+                  style={{ top: `${80 + i * 60}px` }}
+                />
+              ))}
+            </div>
+
+            {/* Page navigation */}
+            <div className="flex items-center justify-between mt-4">
+              <button
+                disabled={currentPage === 0}
+                onClick={() => {
+                  setPageFlipping(true);
+                  setTimeout(() => { setCurrentPage(p => p - 1); setPageFlipping(false); }, 200);
+                }}
+                className="px-5 py-2 bg-amber-700 text-white rounded-lg disabled:opacity-30 hover:bg-amber-800 text-sm font-medium transition-colors"
+              >
+                ◀ Previous
               </button>
+
+              {/* Page dots */}
+              <div className="flex gap-1.5">
+                {Array.from({ length: Math.min(journalList.length + 1, 7) }).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setPageFlipping(true);
+                      setTimeout(() => { setCurrentPage(i); setPageFlipping(false); }, 200);
+                    }}
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      currentPage === i ? 'bg-amber-700' : 'bg-amber-300 hover:bg-amber-500'
+                    }`}
+                  />
+                ))}
+                {journalList.length > 6 && <span className="text-amber-600 text-xs self-center">...</span>}
+              </div>
+
               <button
-                onClick={saveGratitudeJournal}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                disabled={currentPage >= journalList.length}
+                onClick={() => {
+                  setPageFlipping(true);
+                  setTimeout(() => { setCurrentPage(p => p + 1); setPageFlipping(false); }, 200);
+                }}
+                className="px-5 py-2 bg-amber-700 text-white rounded-lg disabled:opacity-30 hover:bg-amber-800 text-sm font-medium transition-colors"
               >
-                Save Journal
+                Next ▶
               </button>
             </div>
           </div>
