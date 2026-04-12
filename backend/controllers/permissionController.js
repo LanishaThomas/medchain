@@ -1,6 +1,7 @@
 const Permission = require('../models/Permission');
 const User = require('../models/User');
 const { writeAuditLog } = require('../services/blockchainAuditService');
+const { notify } = require('../services/notificationService');
 const {
   executeWithBlockchainConsistency,
   hashFromResult,
@@ -119,6 +120,15 @@ exports.requestAccess = async (req, res, next) => {
       accessType: accessType,
       requestId: permission._id
     });
+
+    // Notify patient of new access request
+    notify(patientId, {
+      type: 'permission',
+      title: 'New Access Request 🔐',
+      message: `Dr. ${permission.doctor.firstName} ${permission.doctor.lastName} has requested ${accessType} access to your records.`,
+      priority: 'high',
+      data: { permissionId: permission._id, accessType }
+    }).catch(() => {});
 
     res.status(201).json({
       success: true,
@@ -421,6 +431,15 @@ exports.approveAccess = async (req, res, next) => {
       accessType: permission.accessType
     });
 
+    // Notify doctor that access was approved
+    notify(permission.doctor._id, {
+      type: 'permission',
+      title: 'Access Request Approved ✅',
+      message: `${permission.patient.firstName} ${permission.patient.lastName} approved your ${permission.accessType} access request.`,
+      priority: 'high',
+      data: { permissionId: permission._id, accessType: permission.accessType }
+    }).catch(() => {});
+
     res.status(200).json({
       success: true,
       message: 'Access approved successfully',
@@ -537,6 +556,15 @@ exports.rejectAccess = async (req, res, next) => {
       doctorId: permission.doctor._id
     });
 
+    // Notify doctor that access was rejected
+    notify(permission.doctor._id, {
+      type: 'permission',
+      title: 'Access Request Rejected ❌',
+      message: `Your ${permission.accessType} access request was rejected by the patient.`,
+      priority: 'normal',
+      data: { permissionId: permission._id, accessType: permission.accessType }
+    }).catch(() => {});
+
     res.status(200).json({
       success: true,
       message: 'Access request rejected',
@@ -652,6 +680,15 @@ exports.revokeAccess = async (req, res, next) => {
       patientId: patientId,
       doctorId: permission.doctor._id
     });
+
+    // Notify doctor that access was revoked
+    notify(permission.doctor._id, {
+      type: 'permission',
+      title: 'Access Revoked 🔒',
+      message: `Your ${permission.accessType} access has been revoked by the patient.`,
+      priority: 'high',
+      data: { permissionId: permission._id, accessType: permission.accessType }
+    }).catch(() => {});
 
     res.status(200).json({
       success: true,

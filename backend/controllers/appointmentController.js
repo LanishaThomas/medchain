@@ -2,6 +2,7 @@ const Appointment = require('../models/Appointment');
 const User = require('../models/User');
 const Permission = require('../models/Permission');
 const DoctorHospitalMapping = require('../models/DoctorHospitalMapping');
+const { notify } = require('../services/notificationService');
 const {
   executeWithBlockchainConsistency,
   hashFromResult,
@@ -193,6 +194,15 @@ const requestAppointment = async (req, res) => {
     await appointment.populate('doctor', 'firstName lastName doctorProfile');
     await appointment.populate('hospital', 'name');
     console.log('✅ Populated successfully');
+
+    // Notify doctor of new appointment request
+    notify(appointment.doctor._id, {
+      type: 'appointment',
+      title: 'New Appointment Request',
+      message: `A patient has requested an appointment on ${new Date(appointment.requestedDate).toLocaleDateString()} at ${appointment.requestedTime}.`,
+      priority: appointment.priority === 'urgent' ? 'urgent' : 'normal',
+      data: { appointmentId: appointment._id, appointmentNumber: appointment.appointmentNumber }
+    }).catch(() => {});
 
     res.status(201).json({
       success: true,
@@ -581,6 +591,15 @@ const approveAppointment = async (req, res) => {
     // Populate for response
     await appointment.populate('patient', 'firstName lastName email phone');
 
+    // Notify patient
+    notify(appointment.patient._id, {
+      type: 'appointment',
+      title: 'Appointment Approved ✅',
+      message: `Your appointment on ${new Date(appointment.approvedDate).toLocaleDateString()} at ${appointment.approvedTime} has been approved.`,
+      priority: 'high',
+      data: { appointmentId: appointment._id, appointmentNumber: appointment.appointmentNumber }
+    }).catch(() => {});
+
     res.json({
       success: true,
       message: 'Appointment approved successfully',
@@ -668,6 +687,15 @@ const rejectAppointment = async (req, res) => {
         respondedAt: appointment.respondedAt
       }
     });
+
+    // Notify patient
+    notify(appointment.patient, {
+      type: 'appointment',
+      title: 'Appointment Rejected ❌',
+      message: `Your appointment request was rejected. Reason: ${reason}`,
+      priority: 'high',
+      data: { appointmentId: appointment._id, appointmentNumber: appointment.appointmentNumber }
+    }).catch(() => {});
 
     res.json({
       success: true,
@@ -791,6 +819,15 @@ const rescheduleAppointment = async (req, res) => {
 
     await appointment.populate('patient', 'firstName lastName');
 
+    // Notify patient of reschedule proposal
+    notify(appointment.patient._id, {
+      type: 'appointment',
+      title: 'Appointment Rescheduled 📅',
+      message: `Your doctor proposed a new time: ${new Date(appointment.proposedDate).toLocaleDateString()} at ${appointment.proposedTime}. Please accept or decline.`,
+      priority: 'high',
+      data: { appointmentId: appointment._id, appointmentNumber: appointment.appointmentNumber }
+    }).catch(() => {});
+
     res.json({
       success: true,
       message: 'Reschedule proposal sent to patient',
@@ -877,6 +914,15 @@ const acceptReschedule = async (req, res) => {
 
     await appointment.populate('doctor', 'firstName lastName');
 
+    // Notify doctor that patient accepted reschedule
+    notify(appointment.doctor._id, {
+      type: 'appointment',
+      title: 'Reschedule Accepted ✅',
+      message: `Patient accepted the reschedule. Appointment confirmed for ${new Date(appointment.approvedDate).toLocaleDateString()} at ${appointment.approvedTime}.`,
+      priority: 'normal',
+      data: { appointmentId: appointment._id, appointmentNumber: appointment.appointmentNumber }
+    }).catch(() => {});
+
     res.json({
       success: true,
       message: 'Reschedule accepted! Appointment confirmed.',
@@ -958,6 +1004,15 @@ const declineReschedule = async (req, res) => {
         cancelledAt: appointment.cancelledAt
       }
     });
+
+    // Notify doctor that patient declined
+    notify(appointment.doctor, {
+      type: 'appointment',
+      title: 'Reschedule Declined ❌',
+      message: `Patient declined your reschedule proposal. Appointment has been cancelled.`,
+      priority: 'normal',
+      data: { appointmentId: appointment._id, appointmentNumber: appointment.appointmentNumber }
+    }).catch(() => {});
 
     res.json({
       success: true,
@@ -1043,6 +1098,17 @@ const cancelAppointment = async (req, res) => {
       }
     });
 
+    // Notify the other party
+    const notifyId = isPatient ? appointment.doctor : appointment.patient;
+    const cancellerLabel = isPatient ? 'Patient' : 'Doctor';
+    notify(notifyId, {
+      type: 'appointment',
+      title: 'Appointment Cancelled 🚫',
+      message: `${cancellerLabel} cancelled appointment #${appointment.appointmentNumber}. Reason: ${appointment.cancellationReason}`,
+      priority: 'high',
+      data: { appointmentId: appointment._id, appointmentNumber: appointment.appointmentNumber }
+    }).catch(() => {});
+
     res.json({
       success: true,
       message: 'Appointment cancelled',
@@ -1121,6 +1187,15 @@ const completeAppointment = async (req, res) => {
         completedAt: appointment.completedAt
       }
     });
+
+    // Notify patient
+    notify(appointment.patient, {
+      type: 'appointment',
+      title: 'Appointment Completed ✅',
+      message: `Your appointment #${appointment.appointmentNumber} has been marked as completed.`,
+      priority: 'normal',
+      data: { appointmentId: appointment._id, appointmentNumber: appointment.appointmentNumber }
+    }).catch(() => {});
 
     res.json({
       success: true,

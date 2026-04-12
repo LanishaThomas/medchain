@@ -190,8 +190,6 @@ export default function Sidebar({
           >
             MedChain
           </span>
-
-          </span>
         </div>
 
         {/* ── Role Badge ──────────────────────────── */}

@@ -9,6 +9,7 @@ const {
   hashFromResult
 } = require('../services/blockchainConsistencyService');
 const { attachVerificationStatus, getVerificationStatusForEntity } = require('../services/entityVerificationService');
+const { notify } = require('../services/notificationService');
 
 const createPrescription = async (req, res) => {
   try {
@@ -175,6 +176,15 @@ const createPrescription = async (req, res) => {
       .populate('doctorId', 'firstName lastName email')
       .populate('hospitalId', 'name');
 
+    const medNames = populatedPrescription.medicines.slice(0, 2).map(m => m.name).join(', ');
+    notify(patientId, {
+      type: 'prescription',
+      title: 'New Prescription 💊',
+      message: `Dr. ${populatedPrescription.doctorId?.firstName} ${populatedPrescription.doctorId?.lastName} issued a prescription: ${medNames}${populatedPrescription.medicines.length > 2 ? ' and more' : ''}.`,
+      priority: 'high',
+      data: { prescriptionId: populatedPrescription._id, prescriptionNumber: populatedPrescription.prescriptionNumber }
+    }).catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: 'Prescription created successfully',
@@ -203,6 +213,7 @@ const createPrescription = async (req, res) => {
         createdAt: populatedPrescription.createdAt
       }
     });
+
   } catch (error) {
     console.error('Create prescription error:', error);
     return res.status(500).json({

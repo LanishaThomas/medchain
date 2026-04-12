@@ -23,12 +23,11 @@ interface AppointmentItem {
 }
 
 interface PrescriptionItem {
-  _id: string;
-  medications?: Array<{ name: string; dosage?: string }>;
-  medicationName?: string;
-  dosage?: string;
+  id: string;
+  _id?: string;
+  medicines?: Array<{ name: string; dosage?: string }>;
+  doctorName?: string;
   createdAt: string;
-  doctor?: { firstName?: string; lastName?: string; fullName?: string };
 }
 
 interface ActivityItem {
@@ -74,7 +73,7 @@ function PatientDashboardContent() {
         const activePerms = (permRes.data?.data?.permissions || [])
           .filter((p: any) => p.status === 'approved' && new Date(p.expiryDate) > new Date()).length;
 
-        const allRx: PrescriptionItem[] = rxRes.data?.data?.prescriptions || rxRes.data?.prescriptions || [];
+        const allRx: PrescriptionItem[] = rxRes.data?.data || [];
 
         setStats({
           appointments: upcoming.length,
@@ -92,8 +91,8 @@ function PatientDashboardContent() {
             time: a.date,
           })),
           ...allRx.slice(0, 2).map(r => ({
-            id: r._id, icon: '💊',
-            description: `Prescription: ${r.medications?.[0]?.name || r.medicationName || 'Medication'}`,
+            id: r.id || r._id || String(Math.random()), icon: '💊',
+            description: `Prescription: ${r.medicines?.[0]?.name || 'Medication'}`,
             time: r.createdAt,
           })),
         ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 6);
@@ -293,17 +292,17 @@ function PatientDashboardContent() {
                 ) : (
                   <div className="space-y-3">
                     {ongoingPrescriptions.map((rx, i) => (
-                      <div key={rx._id || i}
+                      <div key={rx.id || rx._id || i}
                         className="flex items-center gap-3 p-3 bg-role-subtle rounded-xl border border-role">
                         <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-soft">
                           <span className="text-xl">💊</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-slate-800 truncate">
-                            {rx.medications?.[0]?.name || rx.medicationName || 'Medication'}
+                            {rx.medicines?.[0]?.name || 'Medication'}
                           </p>
                           <p className="text-xs text-slate-500 truncate">
-                            {rx.medications?.[0]?.dosage || rx.dosage || 'As prescribed'}
+                            {rx.medicines?.[0]?.dosage || 'As prescribed'}
                           </p>
                           <p className="text-xs text-slate-400 mt-0.5">
                             Since {new Date(rx.createdAt).toLocaleDateString('en-IN')}

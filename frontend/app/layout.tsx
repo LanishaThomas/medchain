@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/contexts/AuthContext';
+import ExtensionErrorSuppressor from '@/components/ExtensionErrorSuppressor';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <ExtensionErrorSuppressor />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
