@@ -191,25 +191,7 @@ export default function Sidebar({
             MedChain
           </span>
 
-          {/* Collapse toggle — desktop only */}
-          <button
-            id="sidebar-collapse-btn"
-            onClick={onToggleCollapse}
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={[
-              'hidden lg:flex items-center justify-center',
-              'ml-auto p-1.5 rounded-lg',
-              'text-slate-400 hover:text-slate-600 hover:bg-slate-100',
-              'transition-colors duration-150',
-            ].join(' ')}
-          >
-            <svg
-              className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+          </span>
         </div>
 
         {/* ── Role Badge ──────────────────────────── */}
