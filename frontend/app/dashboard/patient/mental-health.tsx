@@ -36,7 +36,7 @@ interface MusicTrack {
   category: 'meditation' | 'stress-relief' | 'sleep' | 'focus';
   description: string;
   icon: string;
-  audioFile: string; // filename in backend/uploads/audio/
+  audioUrl: string;
 }
 
 const breathingPatterns: BreathingPattern[] = [
@@ -77,74 +77,18 @@ const breathingPatterns: BreathingPattern[] = [
   }
 ];
 
-// Base URL for audio files served from backend
-const AUDIO_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace('/api', '');
+// Audio served from local backend (backend/uploads/audio/)
+const AUDIO_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace('/api', '');
 
 const musicTracks: MusicTrack[] = [
-  { 
-    id: 'rain', 
-    title: 'Peaceful Rain', 
-    category: 'stress-relief',
-    description: 'Gentle rain sounds for relaxation',
-    icon: '🌧️',
-    audioFile: 'rain.mp3'
-  },
-  { 
-    id: 'ocean', 
-    title: 'Ocean Waves', 
-    category: 'meditation',
-    description: 'Calming ocean waves',
-    icon: '🌊',
-    audioFile: 'ocean.mp3'
-  },
-  { 
-    id: 'forest', 
-    title: 'Forest Birds', 
-    category: 'focus',
-    description: 'Natural forest ambience',
-    icon: '🐦',
-    audioFile: 'forest.mp3'
-  },
-  { 
-    id: 'crickets', 
-    title: 'Night Crickets', 
-    category: 'sleep',
-    description: 'Peaceful cricket sounds for sleep',
-    icon: '🦗',
-    audioFile: 'crickets.mp3'
-  },
-  { 
-    id: 'bowls', 
-    title: 'Tibetan Bowls', 
-    category: 'meditation',
-    description: 'Healing bowl sounds',
-    icon: '🔔',
-    audioFile: 'bowls.mp3'
-  },
-  { 
-    id: 'piano', 
-    title: 'Gentle Piano', 
-    category: 'stress-relief',
-    description: 'Soft piano melodies',
-    icon: '🎹',
-    audioFile: 'piano.mp3'
-  },
-  { 
-    id: 'whitenoise', 
-    title: 'White Noise', 
-    category: 'sleep',
-    description: 'Pure white noise for deep sleep',
-    icon: '💤',
-    audioFile: 'whitenoise.mp3'
-  },
-  { 
-    id: 'fireplace', 
-    title: 'Fireplace Crackle', 
-    category: 'stress-relief',
-    description: 'Cozy fireplace sounds',
-    icon: '🔥',
-    audioFile: 'fireplace.mp3'
-  }
+  { id: 'rain',       title: 'Peaceful Rain',    category: 'stress-relief', description: 'Gentle rain sounds for relaxation',    icon: '🌧️', audioUrl: `${AUDIO_BASE_URL}/audio/rain.mp3` },
+  { id: 'ocean',      title: 'Ocean Waves',      category: 'meditation',    description: 'Calming ocean waves',                  icon: '🌊', audioUrl: `${AUDIO_BASE_URL}/audio/ocean.mp3` },
+  { id: 'forest',     title: 'Forest Birds',     category: 'focus',         description: 'Natural forest ambience',              icon: '🐦', audioUrl: `${AUDIO_BASE_URL}/audio/forest.mp3` },
+  { id: 'crickets',   title: 'Night Crickets',   category: 'sleep',         description: 'Peaceful cricket sounds for sleep',    icon: '🦗', audioUrl: `${AUDIO_BASE_URL}/audio/crickets.mp3` },
+  { id: 'bowls',      title: 'Tibetan Bowls',    category: 'meditation',    description: 'Healing bowl sounds',                  icon: '🔔', audioUrl: `${AUDIO_BASE_URL}/audio/bowls.mp3` },
+  { id: 'piano',      title: 'Gentle Piano',     category: 'stress-relief', description: 'Soft piano melodies',                  icon: '🎹', audioUrl: `${AUDIO_BASE_URL}/audio/piano.mp3` },
+  { id: 'whitenoise', title: 'White Noise',      category: 'sleep',         description: 'Pure white noise for deep sleep',      icon: '💤', audioUrl: `${AUDIO_BASE_URL}/audio/whitenoise.mp3` },
+  { id: 'fireplace',  title: 'Fireplace Crackle',category: 'stress-relief', description: 'Cozy fireplace sounds',                icon: '🔥', audioUrl: `${AUDIO_BASE_URL}/audio/fireplace.mp3` },
 ];
 
 const moodEmojis = [
@@ -340,63 +284,49 @@ export default function MentalHealthComponent() {
     setSelectedBreathingPattern(null);
   };
 
-  // Music/Sound Functions - Play real MP3 files from backend
-  const playMusic = (track: MusicTrack) => {
-    // If same track is already loaded, just resume
-    if (audioRef.current && currentTrack?.id === track.id) {
-      audioRef.current.play().catch(console.error);
-      setIsPlaying(true);
+  // Music/Sound Functions
+  const handleTrackClick = (track: MusicTrack) => {
+    // Clicking the currently playing track → stop it
+    if (currentTrack?.id === track.id && isPlaying) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
+      }
+      setIsPlaying(false);
+      setCurrentTrack(null);
       return;
     }
-    // Stop any existing audio first
-    stopMusic(false);
+
+    // Stop whatever is currently playing
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setIsPlaying(false);
     setCurrentTrack(track);
 
     try {
-      const audioUrl = `${AUDIO_BASE_URL}/audio/${track.audioFile}`;
-      const audio = new Audio(audioUrl);
-      audio.loop = true;  // Loop until user pauses
+      const audio = new Audio(track.audioUrl);
+      audio.loop = true;
       audio.volume = 0.7;
+      audioRef.current = audio;
 
-      audio.onerror = () => {
-        console.error(`Audio file not found: ${track.audioFile}`);
-        setIsPlaying(false);
-        setCurrentTrack(null);
-        alert(`Audio file "${track.audioFile}" not found. Please add it to backend/uploads/audio/`);
-      };
-
-      audio.oncanplaythrough = () => {
-        audio.play().catch((err) => {
+      audio.play()
+        .then(() => setIsPlaying(true))
+        .catch((err) => {
           console.error('Playback failed:', err);
           setIsPlaying(false);
           setCurrentTrack(null);
         });
-      };
-
-      audioRef.current = audio;
-      audio.load();
-      setIsPlaying(true);
     } catch (err) {
       console.error('Audio error:', err);
-      alert('Audio not supported in this browser. Try Chrome, Firefox, or Edge.');
+      setIsPlaying(false);
+      setCurrentTrack(null);
     }
   };
 
-  const pauseMusic = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-    setIsPlaying(false);
-  };
-
-  const resumeMusic = () => {
-    if (audioRef.current) {
-      audioRef.current.play().catch(console.error);
-      setIsPlaying(true);
-    }
-  };
-
-  // Fully stop and clear the track
   const stopMusic = (clearTrack = true) => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -533,17 +463,11 @@ export default function MentalHealthComponent() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {filteredMusic.map((track) => {
-                const isActive = currentTrack?.id === track.id;
+                const isActive = currentTrack?.id === track.id && isPlaying;
                 return (
                   <button
                     key={track.id}
-                    onClick={() => {
-                      if (isActive) {
-                        isPlaying ? pauseMusic() : resumeMusic();
-                      } else {
-                        playMusic(track);
-                      }
-                    }}
+                    onClick={() => handleTrackClick(track)}
                     className={`p-3 text-left border-2 rounded-xl transition-all relative ${
                       isActive
                         ? 'border-purple-500 bg-purple-50'
@@ -551,18 +475,14 @@ export default function MentalHealthComponent() {
                     }`}
                   >
                     {isActive && (
-                      <span className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
-                        isPlaying ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'
-                      }`} />
+                      <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                     )}
                     <span className="text-2xl mb-1 block">{track.icon}</span>
                     <h4 className={`font-semibold text-xs leading-tight ${isActive ? 'text-purple-700' : 'text-gray-900'}`}>
                       {track.title}
                     </h4>
                     {isActive && (
-                      <p className={`text-xs mt-1 font-medium ${isPlaying ? 'text-green-600' : 'text-yellow-600'}`}>
-                        {isPlaying ? '▶ Playing' : '⏸ Paused'}
-                      </p>
+                      <p className="text-xs mt-1 font-medium text-green-600">▶ Playing</p>
                     )}
                   </button>
                 );
@@ -587,47 +507,6 @@ export default function MentalHealthComponent() {
             </button>
           </div>
 
-          {/* Currently Playing / Paused */}
-          {currentTrack && (
-            <div className="bg-white rounded-xl border border-purple-200 p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <span className="text-3xl">{currentTrack.icon}</span>
-                    {isPlaying && (
-                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse" />
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">{currentTrack.title}</h4>
-                    <p className="text-xs text-gray-500">
-                      {isPlaying ? '🎵 Playing — loops until paused' : '⏸ Paused'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {/* Pause / Resume toggle */}
-                  <button
-                    onClick={isPlaying ? pauseMusic : resumeMusic}
-                    className={`px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors ${
-                      isPlaying
-                        ? 'bg-yellow-500 hover:bg-yellow-600'
-                        : 'bg-green-500 hover:bg-green-600'
-                    }`}
-                  >
-                    {isPlaying ? '⏸ Pause' : '▶ Resume'}
-                  </button>
-                  {/* Stop completely */}
-                  <button
-                    onClick={() => stopMusic()}
-                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium"
-                  >
-                    ■ Stop
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Sidebar */}
