@@ -224,7 +224,9 @@ exports.registerDoctor = async (req, res, next) => {
       hospitalId,
       applicationNote,
       employmentType,
-      department
+      department,
+      offersOnlineConsultation,
+      onlineConsultationFee
     } = req.body;
 
     // Check if email already exists
@@ -266,7 +268,9 @@ exports.registerDoctor = async (req, res, next) => {
         licenseExpiry: licenseExpiry ? new Date(licenseExpiry) : undefined,
         specializations,
         yearsOfExperience,
-        bio
+        bio,
+        offersOnlineConsultation: Boolean(offersOnlineConsultation),
+        onlineConsultationFee: offersOnlineConsultation ? Number(onlineConsultationFee || 0) : 0
       }
     });
 

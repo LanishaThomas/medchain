@@ -1297,13 +1297,10 @@ const markNoShow = async (req, res) => {
  */
 const getAvailableDoctors = async (req, res) => {
   try {
-    const { specialization, hospitalId } = req.query;
+    const { specialization, hospitalId, onlineOnly } = req.query;
 
-    // Find approved doctors
     let query = { status: 'approved' };
-    if (hospitalId) {
-      query.hospital = hospitalId;
-    }
+    if (hospitalId) query.hospital = hospitalId;
 
     const mappings = await DoctorHospitalMapping.find(query)
       .populate({
@@ -1312,19 +1309,25 @@ const getAvailableDoctors = async (req, res) => {
       })
       .populate('hospital', 'name address');
 
-    // Filter out null doctors and by specialization if provided
     const doctors = mappings
       .filter(m => {
         if (!m.doctor) return false;
-        if (specialization) {
-          return m.doctor.doctorProfile?.specializations?.includes(specialization);
-        }
+        if (specialization && !m.doctor.doctorProfile?.specializations?.includes(specialization)) return false;
+        // If patient wants online consultation, only show doctors who offer it
+        if (onlineOnly === 'true' && !m.doctor.doctorProfile?.offersOnlineConsultation) return false;
         return true;
       })
       .map(m => ({
         id: m.doctor._id,
         name: `Dr. ${m.doctor.firstName} ${m.doctor.lastName}`,
         specialization: m.doctor.doctorProfile?.specializations?.[0] || 'General Medicine',
+        specializations: m.doctor.doctorProfile?.specializations || [],
+        bio: m.doctor.doctorProfile?.bio || null,
+        yearsOfExperience: m.doctor.doctorProfile?.yearsOfExperience || null,
+        languages: m.doctor.doctorProfile?.languages || [],
+        offersOnlineConsultation: m.doctor.doctorProfile?.offersOnlineConsultation || false,
+        onlineConsultationFee: m.doctor.doctorProfile?.onlineConsultationFee || 0,
+        consultationFee: m.doctor.doctorProfile?.consultationFee || null,
         hospital: {
           id: m.hospital._id,
           name: m.hospital.name,
@@ -1333,7 +1336,7 @@ const getAvailableDoctors = async (req, res) => {
         department: m.department
       }));
 
-    // Remove duplicates (doctor may be at multiple hospitals)
+    // Remove duplicates
     const uniqueDoctors = [];
     const seen = new Set();
     for (const doc of doctors) {
@@ -1344,11 +1347,7 @@ const getAvailableDoctors = async (req, res) => {
       }
     }
 
-    res.json({
-      success: true,
-      count: uniqueDoctors.length,
-      data: uniqueDoctors
-    });
+    res.json({ success: true, count: uniqueDoctors.length, data: uniqueDoctors });
 
   } catch (error) {
     console.error('Get available doctors error:', error);

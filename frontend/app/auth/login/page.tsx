@@ -36,6 +36,8 @@ export default function LoginPage() {
   const [specialization, setSpecialization] = useState('');
   const [hospitalId, setHospitalId] = useState('');
   const [hospitals, setHospitals] = useState<any[]>([]);
+  const [offersOnlineConsultation, setOffersOnlineConsultation] = useState(false);
+  const [onlineConsultationFee, setOnlineConsultationFee] = useState('');
   
   // Hospital fields
   const [hospitalName, setHospitalName] = useState('');
@@ -152,7 +154,9 @@ export default function LoginPage() {
         licenseState,
         licenseExpiry: licenseExpiry || undefined,
         specializations: specialization ? [specialization] : [],
-        hospitalId
+        hospitalId,
+        offersOnlineConsultation,
+        onlineConsultationFee: offersOnlineConsultation ? Number(onlineConsultationFee || 0) : 0
       };
       console.log('📤 Doctor registration data:', doctorData);
       await authService.registerDoctor(doctorData);
@@ -540,6 +544,34 @@ export default function LoginPage() {
                   ))}
                 </select>
                 <p className="text-xs text-gray-500 mt-1">You'll need hospital approval to practice</p>
+              </div>
+
+              {/* Online consultation */}
+              <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={offersOnlineConsultation}
+                    onChange={e => setOffersOnlineConsultation(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">💻 I offer online consultations</span>
+                </label>
+                {offersOnlineConsultation && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Online Consultation Fee (₹) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={onlineConsultationFee}
+                      onChange={e => setOnlineConsultationFee(e.target.value)}
+                      required={offersOnlineConsultation}
+                      placeholder="e.g. 500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Shown to patients when booking online appointments</p>
+                  </div>
+                )}
               </div>
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>

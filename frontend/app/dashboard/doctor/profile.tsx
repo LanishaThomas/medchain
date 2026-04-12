@@ -57,6 +57,8 @@ interface DoctorProfile {
     consultationFee?: number;
     languages: string[];
     profileSettings?: ProfileSettings;
+    offersOnlineConsultation?: boolean;
+    onlineConsultationFee?: number;
   };
 }
 
@@ -87,6 +89,8 @@ export default function DoctorProfilePage() {
     achievements: [] as Achievement[],
     consultationFee: 0,
     languages: [] as string[],
+    offersOnlineConsultation: false,
+    onlineConsultationFee: 0,
     profileSettings: {
       isPublic: true,
       showEmail: false,
@@ -132,6 +136,8 @@ export default function DoctorProfilePage() {
           achievements: p.doctorProfile?.achievements || [],
           consultationFee: p.doctorProfile?.consultationFee || 0,
           languages: p.doctorProfile?.languages || [],
+          offersOnlineConsultation: p.doctorProfile?.offersOnlineConsultation || false,
+          onlineConsultationFee: p.doctorProfile?.onlineConsultationFee || 0,
           profileSettings: p.doctorProfile?.profileSettings || { isPublic: true, showEmail: false, showPhone: false }
         });
 
@@ -453,6 +459,39 @@ export default function DoctorProfilePage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100"
                 />
               </div>
+            </div>
+
+            {/* Online Consultation Settings */}
+            <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700">Consultation Mode</h3>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.offersOnlineConsultation}
+                  onChange={e => setFormData(prev => ({ ...prev, offersOnlineConsultation: e.target.checked }))}
+                  disabled={!editMode}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                />
+                <span className="text-sm text-gray-700">💻 I offer online consultations (telemedicine)</span>
+              </label>
+              {formData.offersOnlineConsultation && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Online Consultation Fee (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.onlineConsultationFee}
+                    onChange={e => setFormData(prev => ({ ...prev, onlineConsultationFee: parseInt(e.target.value) || 0 }))}
+                    disabled={!editMode}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100"
+                    placeholder="e.g. 500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Shown to patients when booking online appointments</p>
+                </div>
+              )}
+              {!formData.offersOnlineConsultation && !editMode && (
+                <p className="text-xs text-gray-400">Online consultations not offered — only in-person bookings available</p>
+              )}
             </div>
 
             {/* Bio */}

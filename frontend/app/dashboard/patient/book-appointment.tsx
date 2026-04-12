@@ -27,10 +27,14 @@ interface Doctor {
   id: string;
   name: string;
   specialization: string;
-  hospital: {
-    id: string;
-    name: string;
-  };
+  specializations?: string[];
+  bio?: string;
+  yearsOfExperience?: number;
+  languages?: string[];
+  offersOnlineConsultation?: boolean;
+  onlineConsultationFee?: number;
+  consultationFee?: number | null;
+  hospital: { id: string; name: string; address?: any };
   department?: string;
 }
 
@@ -104,6 +108,7 @@ export default function BookAppointmentComponent() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [viewingDoctor, setViewingDoctor] = useState<Doctor | null>(null);
   
   // Form data
   const [formData, setFormData] = useState({
@@ -131,7 +136,7 @@ export default function BookAppointmentComponent() {
     if (selectedHospital) {
       fetchDoctorsByHospital(selectedHospital.id);
     }
-  }, [selectedHospital, specializationFilter]);
+  }, [selectedHospital, specializationFilter, formData.consultationMode]);
 
   const fetchHospitals = async () => {
     try {
@@ -171,13 +176,11 @@ export default function BookAppointmentComponent() {
       setLoadingDoctors(true);
       const params = new URLSearchParams({ hospitalId });
       if (specializationFilter) params.append('specialization', specializationFilter);
+      if (formData.consultationMode === 'online') params.append('onlineOnly', 'true');
 
       const response = await authService.client.get(`/appointments/doctors?${params}`);
       const data = response.data;
-      
-      if (data.success) {
-        setDoctors(data.data);
-      }
+      if (data.success) setDoctors(data.data);
     } catch (err: any) {
       console.error('Failed to fetch doctors:', err);
       setError(err.response?.data?.message || 'Failed to load doctors');
@@ -417,6 +420,34 @@ export default function BookAppointmentComponent() {
             </button>
           </div>
 
+          {/* Consultation mode picker — shown before doctor selection so list filters correctly */}
+          {bookingStep !== 'form' && (
+            <div className="mb-4 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData(f => ({ ...f, consultationMode: 'offline', appointmentType: 'consultation' }))}
+                className={`flex-1 py-2 rounded-lg border text-sm font-medium transition ${
+                  formData.consultationMode === 'offline'
+                    ? 'bg-blue-50 border-blue-400 text-blue-700'
+                    : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                🏥 In-person
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData(f => ({ ...f, consultationMode: 'online', appointmentType: 'telemedicine' }))}
+                className={`flex-1 py-2 rounded-lg border text-sm font-medium transition ${
+                  formData.consultationMode === 'online'
+                    ? 'bg-green-50 border-green-400 text-green-700'
+                    : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                💻 Online
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Step 1: Select Hospital */}
             {bookingStep === 'hospital' && (
@@ -526,27 +557,64 @@ export default function BookAppointmentComponent() {
                       <p className="text-center text-gray-500 py-8">Loading doctors...</p>
                     ) : doctors.length === 0 ? (
                       <p className="text-center text-gray-500 py-8">
-                        {specializationFilter 
-                          ? `No ${specializationFilter} doctors found at this hospital` 
-                          : 'No doctors found at this hospital'}
+                        {formData.consultationMode === 'online'
+                          ? 'No doctors offering online consultation at this hospital'
+                          : specializationFilter
+                            ? `No ${specializationFilter} doctors found at this hospital`
+                            : 'No doctors found at this hospital'}
                       </p>
                     ) : (
                       doctors.map((doctor) => (
-                        <button
+                        <div
                           key={doctor.id}
-                          onClick={() => handleSelectDoctor(doctor)}
-                          className="w-full p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-left transition flex items-center justify-between"
+                          className="p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition"
                         >
-                          <div className="flex items-baseline gap-3">
-                            <span className="font-semibold text-gray-900 text-lg">{doctor.name}</span>
-                            <span className="text-sm text-blue-600">• {doctor.specialization}</span>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-baseline gap-2 flex-wrap">
+                                <span className="font-semibold text-gray-900">{doctor.name}</span>
+                                <span className="text-sm text-blue-600">• {doctor.specialization}</span>
+                                {doctor.offersOnlineConsultation && (
+                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">💻 Online</span>
+                                )}
+                              </div>
+                              {doctor.department && (
+                                <p className="text-xs text-gray-500 mt-0.5">{doctor.department}</p>
+                              )}
+                              <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
+                                {doctor.yearsOfExperience && (
+                                  <span>🎓 {doctor.yearsOfExperience} yrs exp</span>
+                                )}
+                                {formData.consultationMode === 'online' && doctor.onlineConsultationFee != null && (
+                                  <span className="font-semibold text-blue-700">
+                                    💰 Online fee: ₹{doctor.onlineConsultationFee}
+                                  </span>
+                                )}
+                                {formData.consultationMode === 'offline' && doctor.consultationFee != null && (
+                                  <span className="font-semibold text-gray-700">
+                                    💰 Fee: ₹{doctor.consultationFee}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-2 flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setViewingDoctor(doctor)}
+                                className="px-3 py-1.5 text-xs border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50"
+                              >
+                                View Profile
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSelectDoctor(doctor)}
+                                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                              >
+                                Select →
+                              </button>
+                            </div>
                           </div>
-                          {doctor.department && (
-                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                              {doctor.department}
-                            </span>
-                          )}
-                        </button>
+                        </div>
                       ))
                     )}
                   </div>
@@ -567,13 +635,25 @@ export default function BookAppointmentComponent() {
                         <p className="font-semibold text-blue-900">{selectedDoctor.name}</p>
                         <p className="text-sm text-blue-700">{selectedDoctor.specialization}</p>
                         <p className="text-sm text-blue-600">🏥 {selectedHospital.name}</p>
+                        {formData.consultationMode === 'online' && selectedDoctor.onlineConsultationFee != null && (
+                          <p className="text-sm font-semibold text-green-700 mt-1">
+                            💰 Online consultation fee: ₹{selectedDoctor.onlineConsultationFee}
+                          </p>
+                        )}
+                        {formData.consultationMode === 'offline' && selectedDoctor.consultationFee != null && (
+                          <p className="text-sm font-semibold text-gray-700 mt-1">
+                            💰 Consultation fee: ₹{selectedDoctor.consultationFee}
+                          </p>
+                        )}
                       </div>
-                      <button
-                        onClick={handleBackToDoctors}
-                        className="text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        ← Change
-                      </button>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setViewingDoctor(selectedDoctor)}
+                          className="text-xs px-3 py-1.5 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-100">
+                          View Profile
+                        </button>
+                        <button type="button" onClick={handleBackToDoctors}
+                          className="text-sm text-blue-600 hover:text-blue-800">← Change</button>
+                      </div>
                     </div>
                   </div>
 
@@ -622,38 +702,24 @@ export default function BookAppointmentComponent() {
                       </select>
                     </div>
 
-                    {/* Consultation Mode */}
+                    {/* Consultation Mode — read-only summary in step 3 */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Consultation Mode
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, consultationMode: 'offline', appointmentType: 'consultation' })}
-                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition ${
-                            formData.consultationMode === 'offline'
-                              ? 'bg-blue-50 border-blue-300 text-blue-700'
-                              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          Offline Consultation
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, consultationMode: 'online', appointmentType: 'telemedicine' })}
-                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition ${
-                            formData.consultationMode === 'online'
-                              ? 'bg-blue-50 border-blue-300 text-blue-700'
-                              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          Online Consultation
-                        </button>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Consultation Mode</label>
+                      <div className={`px-4 py-2 rounded-lg border text-sm font-medium ${
+                        formData.consultationMode === 'online'
+                          ? 'bg-green-50 border-green-300 text-green-700'
+                          : 'bg-blue-50 border-blue-300 text-blue-700'
+                      }`}>
+                        {formData.consultationMode === 'online' ? '💻 Online Consultation' : '🏥 In-person Consultation'}
+                        {formData.consultationMode === 'online' && selectedDoctor?.onlineConsultationFee != null && (
+                          <span className="ml-2 font-semibold">· ₹{selectedDoctor.onlineConsultationFee}</span>
+                        )}
+                        <button type="button" onClick={handleBackToDoctors}
+                          className="ml-2 text-xs underline opacity-70 hover:opacity-100">change</button>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Meet/Join options are available only for online consultations.
-                      </p>
+                      {formData.consultationMode === 'online' && !selectedDoctor?.offersOnlineConsultation && (
+                        <p className="text-xs text-red-600 mt-1">⚠️ This doctor does not offer online consultations.</p>
+                      )}
                     </div>
 
                     {/* Priority */}
@@ -729,6 +795,103 @@ export default function BookAppointmentComponent() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Doctor Details Modal */}
+      {viewingDoctor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setViewingDoctor(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">{viewingDoctor.name}</h2>
+                <p className="text-sm text-blue-600">{viewingDoctor.specialization}</p>
+              </div>
+              <button onClick={() => setViewingDoctor(null)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Hospital */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Hospital</p>
+                <p className="text-sm text-gray-800">🏥 {viewingDoctor.hospital.name}</p>
+                {viewingDoctor.department && (
+                  <p className="text-xs text-gray-500 mt-0.5">Dept: {viewingDoctor.department}</p>
+                )}
+              </div>
+
+              {/* Experience & Languages */}
+              <div className="flex gap-6">
+                {viewingDoctor.yearsOfExperience != null && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Experience</p>
+                    <p className="text-sm text-gray-800">🎓 {viewingDoctor.yearsOfExperience} years</p>
+                  </div>
+                )}
+                {viewingDoctor.languages && viewingDoctor.languages.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Languages</p>
+                    <p className="text-sm text-gray-800">🗣 {viewingDoctor.languages.join(', ')}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Consultation Fees */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Consultation Fees</p>
+                <div className="flex flex-wrap gap-3">
+                  {viewingDoctor.consultationFee != null && (
+                    <span className="text-sm bg-gray-100 text-gray-700 px-3 py-1 rounded-full">
+                      🏥 In-person: ₹{viewingDoctor.consultationFee}
+                    </span>
+                  )}
+                  {viewingDoctor.offersOnlineConsultation ? (
+                    <span className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded-full">
+                      💻 Online: ₹{viewingDoctor.onlineConsultationFee}
+                    </span>
+                  ) : (
+                    <span className="text-sm bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
+                      💻 Online: Not available
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Specializations */}
+              {viewingDoctor.specializations && viewingDoctor.specializations.length > 1 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Specializations</p>
+                  <div className="flex flex-wrap gap-2">
+                    {viewingDoctor.specializations.map((s, i) => (
+                      <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Bio */}
+              {viewingDoctor.bio && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">About</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{viewingDoctor.bio}</p>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setViewingDoctor(null)}
+                  className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">
+                  Close
+                </button>
+                <button
+                  onClick={() => { handleSelectDoctor(viewingDoctor); setViewingDoctor(null); }}
+                  className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                  Book with {viewingDoctor.name.split(' ')[1]}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

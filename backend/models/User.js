@@ -73,6 +73,8 @@ const userSchema = new mongoose.Schema({
     }],
     consultationFee: Number,
     languages: [String],
+    offersOnlineConsultation: { type: Boolean, default: false },
+    onlineConsultationFee: { type: Number, default: 0 },
     // Profile sharing settings
     profileSettings: {
       isPublic: { type: Boolean, default: true },

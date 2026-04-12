@@ -459,7 +459,9 @@ exports.getDoctorProfile = async (req, res) => {
         certificates: doctor.doctorProfile?.certificates || [],
         achievements: doctor.doctorProfile?.achievements || [],
         consultationFee: doctor.doctorProfile?.consultationFee,
-        languages: doctor.doctorProfile?.languages || []
+        languages: doctor.doctorProfile?.languages || [],
+        offersOnlineConsultation: doctor.doctorProfile?.offersOnlineConsultation || false,
+        onlineConsultationFee: doctor.doctorProfile?.onlineConsultationFee || 0
       }
     };
     profileData.verificationStatus = verificationStatus;
@@ -531,7 +533,9 @@ exports.getDoctorProfileBySlug = async (req, res) => {
         certificates: doctor.doctorProfile?.certificates || [],
         achievements: doctor.doctorProfile?.achievements || [],
         consultationFee: doctor.doctorProfile?.consultationFee,
-        languages: doctor.doctorProfile?.languages || []
+        languages: doctor.doctorProfile?.languages || [],
+        offersOnlineConsultation: doctor.doctorProfile?.offersOnlineConsultation || false,
+        onlineConsultationFee: doctor.doctorProfile?.onlineConsultationFee || 0
       }
     };
     profileData.verificationStatus = verificationStatus;
@@ -573,7 +577,9 @@ exports.updateDoctorProfile = async (req, res) => {
       achievements,
       consultationFee,
       languages,
-      profileSettings
+      profileSettings,
+      offersOnlineConsultation,
+      onlineConsultationFee
     } = req.body;
     
     // Build update object
@@ -596,6 +602,8 @@ exports.updateDoctorProfile = async (req, res) => {
     if (certificates) updateData['doctorProfile.certificates'] = certificates;
     if (achievements) updateData['doctorProfile.achievements'] = achievements;
     if (consultationFee !== undefined) updateData['doctorProfile.consultationFee'] = consultationFee;
+    if (offersOnlineConsultation !== undefined) updateData['doctorProfile.offersOnlineConsultation'] = Boolean(offersOnlineConsultation);
+    if (onlineConsultationFee !== undefined) updateData['doctorProfile.onlineConsultationFee'] = Number(onlineConsultationFee) || 0;
     if (languages) updateData['doctorProfile.languages'] = languages;
     
     // Profile settings
