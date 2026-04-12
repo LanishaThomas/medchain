@@ -53,6 +53,7 @@ const roleConfig: Record<UserRole, RoleConfig> = {
     badgeBg:    'bg-violet-100 text-violet-700',
     navItems: [
       { name: 'Dashboard',           href: '/dashboard/hospital',                       icon: <HomeIcon /> },
+      { name: 'Active Doctors',      href: '/dashboard/hospital?section=doctors',      icon: <UsersIcon /> },
       { name: 'Doctor Applications', href: '/dashboard/hospital?section=applications',  icon: <UserCheckIcon /> },
       { name: 'Emergency Access',    href: '/dashboard/hospital?section=emergency',     icon: <AlertIcon /> },
     ],

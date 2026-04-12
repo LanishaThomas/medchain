@@ -20,8 +20,29 @@ const emergencyRoutes = require('./routes/emergencyRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const prescriptionRoutes = require('./routes/prescriptionRoutes');
 const blockchainRoutes = require('./routes/blockchainRoutes');
+const consultationRoutes = require('./routes/consultationRoutes');
 
 const app = express();
+
+function isValidAgoraAppId(appId) {
+  return /^[A-Za-z0-9]{32}$/.test(appId);
+}
+
+function getConsultationStartupMode() {
+  const appId = String(process.env.AGORA_APP_ID || '').trim();
+  const appCertificate = String(process.env.AGORA_APP_CERTIFICATE || '').trim();
+  const forceDemoMode = String(process.env.CONSULTATION_FORCE_DEMO_MODE || '').toLowerCase() === 'true';
+
+  if (forceDemoMode) {
+    return 'demo (forced by CONSULTATION_FORCE_DEMO_MODE)';
+  }
+
+  if (isValidAgoraAppId(appId) && appCertificate) {
+    return 'live Agora';
+  }
+
+  return 'demo (invalid or missing Agora credentials)';
+}
 
 // Connect to MongoDB
 connectDB();
@@ -101,6 +122,7 @@ app.use('/api/emergency', emergencyRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/blockchain', blockchainRoutes);
+app.use('/api/consultations', consultationRoutes);
 
 // 404 handler
 app.use((req, res, next) => {
@@ -124,6 +146,7 @@ const server = app.listen(PORT, () => {
 ║  Environment: ${(process.env.NODE_ENV || 'development').padEnd(34)}║
 ║  Port: ${PORT.toString().padEnd(41)}║
 ║  Frontend URL: ${(process.env.FRONTEND_URL || 'http://localhost:3000').padEnd(33)}║
+║  Consultation: ${getConsultationStartupMode().padEnd(32)}║
 ╚═══════════════════════════════════════════════════╝
 
 Available Routes:

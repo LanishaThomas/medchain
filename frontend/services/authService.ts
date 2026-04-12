@@ -88,7 +88,12 @@ class AuthService {
   private handleResponseError = async (error: any) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Don't attempt token refresh for auth endpoints — they don't need a token
+    const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') ||
+      originalRequest?.url?.includes('/auth/refresh') ||
+      originalRequest?.url?.includes('/auth/logout');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (this.isRefreshing) {
         return new Promise((resolve, reject) => {
           this.failedQueue.push({ resolve, reject });

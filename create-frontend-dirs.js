@@ -10,8 +10,7 @@ const dirs = [
   'auth/caregiver-accept',
   'dashboard/hospital',
   'dashboard/doctor',
-  'dashboard/patient',
-  'dashboard/caregiver'
+  'dashboard/patient'
 ];
 
 dirs.forEach(dir => {

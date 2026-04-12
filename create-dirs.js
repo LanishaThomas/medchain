@@ -13,7 +13,6 @@ const directories = [
   'dashboard/hospital',
   'dashboard/doctor',
   'dashboard/patient',
-  'dashboard/caregiver',
   'doctor/[slug]'
 ];
 

@@ -33,6 +33,26 @@ interface HospitalStats {
   totalRecords: number;
 }
 
+interface ActiveDoctorProfile {
+  mappingId: string;
+  doctor: {
+    id: string;
+    fullName: string;
+    email: string;
+    phone?: string;
+    profileImage?: string;
+    licenseNumber?: string;
+    specializations?: string[];
+    yearsOfExperience?: number;
+  };
+  department?: string;
+  employmentType?: string;
+  designation?: string;
+  consultationFee?: number;
+  isAvailable?: boolean;
+  joiningDate?: string;
+}
+
 /* ─── Inner Component (uses searchParams) ────────────── */
 function HospitalDashboardContent() {
   const router = useRouter();
@@ -41,6 +61,7 @@ function HospitalDashboardContent() {
   const { user, isLoading: authLoading, logout } = useAuth();
 
   const [pendingDoctors, setPendingDoctors] = useState<DoctorApplication[]>([]);
+  const [activeDoctors, setActiveDoctors] = useState<ActiveDoctorProfile[]>([]);
   const [stats, setStats]           = useState<HospitalStats>({ approvedDoctors: 0, pendingApplications: 0, totalRecords: 0 });
   const [hospitalName, setHospitalName] = useState('');
   const [isLoading, setIsLoading]   = useState(true);
@@ -65,9 +86,10 @@ function HospitalDashboardContent() {
     try {
       setIsLoading(true);
       setError('');
-      const [profileRes, applicationsRes] = await Promise.all([
+      const [profileRes, applicationsRes, doctorsRes] = await Promise.all([
         authService.getHospitalProfile(),
         authService.getPendingApplications(),
+        authService.client.get('/hospital/doctors?status=approved&limit=200'),
       ]);
       if (profileRes.data?.success) {
         setHospitalName(profileRes.data.data.hospital.name);
@@ -75,6 +97,9 @@ function HospitalDashboardContent() {
       }
       if (applicationsRes.data?.success) {
         setPendingDoctors(applicationsRes.data.data.applications);
+      }
+      if (doctorsRes.data?.success) {
+        setActiveDoctors(doctorsRes.data.data.doctors || []);
       }
     } catch (err: any) {
       console.error('Dashboard load error:', err);
@@ -202,6 +227,53 @@ function HospitalDashboardContent() {
     </div>
   );
 
+  const ActiveDoctorsList = () => (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-soft">
+      <div className="p-6 border-b border-gray-200">
+        <h2 className="text-xl font-semibold text-gray-900">Active Doctors Profiles</h2>
+        <p className="text-sm text-gray-500 mt-0.5">All currently approved doctors in your hospital</p>
+      </div>
+
+      {activeDoctors.length === 0 ? (
+        <div className="p-8 text-center">
+          <div className="text-5xl mb-3">👨‍⚕️</div>
+          <p className="text-gray-500">No active doctors found.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {activeDoctors.map((item) => (
+            <div key={item.mappingId} className="p-6 hover:bg-slate-50 transition">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold text-gray-900">Dr. {item.doctor.fullName}</h3>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-600">
+                    <p><strong>Email:</strong> {item.doctor.email}</p>
+                    <p><strong>Phone:</strong> {item.doctor.phone || 'N/A'}</p>
+                    <p><strong>Department:</strong> {item.department || 'N/A'}</p>
+                    <p><strong>Employment:</strong> {item.employmentType || 'N/A'}</p>
+                    <p><strong>Designation:</strong> {item.designation || 'N/A'}</p>
+                    <p><strong>Experience:</strong> {item.doctor.yearsOfExperience || 0} years</p>
+                    <p><strong>License:</strong> {item.doctor.licenseNumber || 'N/A'}</p>
+                    <p><strong>Fee:</strong> {item.consultationFee ? `INR ${item.consultationFee}` : 'N/A'}</p>
+                    <p><strong>Joined:</strong> {item.joiningDate ? new Date(item.joiningDate).toLocaleDateString() : 'N/A'}</p>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-2">
+                    <strong>Specializations:</strong> {item.doctor.specializations?.length ? item.doctor.specializations.join(', ') : 'N/A'}
+                  </p>
+                </div>
+                <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
+                  item.isAvailable ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {item.isAvailable ? 'Available' : 'Unavailable'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   /* ═══ RENDER ═══════════════════════════════════════════ */
   return (
     <div className="theme-hospital min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 animate-fade-in">
@@ -213,6 +285,7 @@ function HospitalDashboardContent() {
             <div>
               <h1 className="text-2xl font-bold tracking-tight">
                 {section === 'applications' ? '📋 Doctor Applications'
+                  : section === 'doctors' ? '👨‍⚕️ Active Doctors Profiles'
                   : section === 'emergency' ? '🚨 Emergency Access'
                   : 'Hospital Dashboard'}
               </h1>
@@ -274,6 +347,18 @@ function HospitalDashboardContent() {
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Total Records</p>
                 <p className="text-3xl font-bold text-role-dark">{stats.totalRecords}</p>
                 <p className="text-xs text-slate-400 mt-1">On blockchain</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-soft p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-800">👨‍⚕️ Active Doctor Profiles</h3>
+                  <p className="text-xs text-slate-500 mt-1">View all approved doctor profiles any time</p>
+                </div>
+                <a href="/dashboard/hospital?section=doctors" className="text-xs font-semibold text-role-primary hover:underline">
+                  Open Profiles →
+                </a>
               </div>
             </div>
 
@@ -379,6 +464,7 @@ function HospitalDashboardContent() {
             SECTION VIEWS
             ════════════════════════════════════════════ */}
         {section === 'applications' && <DoctorApplicationsList />}
+        {section === 'doctors' && <ActiveDoctorsList />}
         {section === 'emergency' && <EmergencyAccessPage />}
 
       </div>

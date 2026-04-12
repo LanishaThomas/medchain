@@ -24,9 +24,6 @@ export default function Home() {
           case 'patient':
             router.push('/dashboard/patient');
             break;
-          case 'caregiver':
-            router.push('/dashboard/caregiver');
-            break;
           default:
             router.push('/auth/login');
         }

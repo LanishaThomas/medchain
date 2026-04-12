@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { authService } from '@/services/authService';
+import { useRouter } from 'next/navigation';
 
 interface Appointment {
   id: string;
@@ -31,6 +32,7 @@ interface Appointment {
   doctorNotes?: string;
   requestedAt: string;
   respondedAt?: string;
+  time?: string;
 }
 
 interface AppointmentCounts {
@@ -78,6 +80,7 @@ const getAppointmentTypeLabel = (type: string) => {
 };
 
 export default function AppointmentManagementComponent() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'pending' | 'today' | 'all'>('pending');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
@@ -96,7 +99,7 @@ export default function AppointmentManagementComponent() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   
   // Form data for modals
-  const [approveData, setApproveData] = useState({ notes: '', meetingLink: '' });
+  const [approveData, setApproveData] = useState({ notes: '' });
   const [rejectReason, setRejectReason] = useState('');
   const [rescheduleData, setRescheduleData] = useState({ 
     proposedDate: '', 
@@ -163,15 +166,14 @@ export default function AppointmentManagementComponent() {
       const response = await authService.client.post(
         `/appointments/${selectedAppointment.id}/approve`,
         {
-          notes: approveData.notes,
-          meetingLink: approveData.meetingLink || undefined
+          notes: approveData.notes
         }
       );
       const data = response.data;
       if (data.success) {
         setSuccess('✅ Appointment approved!');
         setShowApproveModal(false);
-        setApproveData({ notes: '', meetingLink: '' });
+        setApproveData({ notes: '' });
         fetchPendingAppointments();
         fetchTodayAppointments();
         fetchAllAppointments();
@@ -514,6 +516,14 @@ export default function AppointmentManagementComponent() {
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    {apt.appointmentType === 'telemedicine' && (
+                      <button
+                        onClick={() => router.push(`/dashboard/consultation/${apt.id}`)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                      >
+                        Meet
+                      </button>
+                    )}
                     <button
                       onClick={() => handleComplete(apt.id)}
                       disabled={processingId === apt.id}
@@ -578,9 +588,19 @@ export default function AppointmentManagementComponent() {
                         {getAppointmentTypeLabel(apt.appointmentType)} • #{apt.appointmentNumber}
                       </p>
                     </div>
-                    <span className={`px-3 py-1 ${badge.bg} ${badge.text} text-sm rounded-full`}>
-                      {badge.icon} {badge.label}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {apt.status === 'approved' && apt.appointmentType === 'telemedicine' && (
+                        <button
+                          onClick={() => router.push(`/dashboard/consultation/${apt.id}`)}
+                          className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                        >
+                          Meet
+                        </button>
+                      )}
+                      <span className={`px-3 py-1 ${badge.bg} ${badge.text} text-sm rounded-full`}>
+                        {badge.icon} {badge.label}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
@@ -616,20 +636,6 @@ export default function AppointmentManagementComponent() {
                 />
               </div>
 
-              {selectedAppointment.appointmentType === 'telemedicine' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Meeting Link (for telemedicine)
-                  </label>
-                  <input
-                    type="url"
-                    placeholder="https://meet.google.com/..."
-                    value={approveData.meetingLink}
-                    onChange={(e) => setApproveData({...approveData, meetingLink: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-              )}
             </div>
 
             <div className="flex gap-3 mt-6">

@@ -248,7 +248,7 @@ const getDoctorPrescriptions = async (req, res) => {
       entityType: 'PRESCRIPTION',
       getId: (item) => item.id,
       getHash: (item) => item.blockchainHash
-    });
+    }).catch(() => mapped.map(item => ({ ...item, verificationStatus: 'UNVERIFIED' })));
 
     return res.status(200).json({
       success: true,
@@ -299,7 +299,7 @@ const getPatientPrescriptions = async (req, res) => {
       entityType: 'PRESCRIPTION',
       getId: (item) => item.id,
       getHash: (item) => item.blockchainHash
-    });
+    }).catch(() => mapped.map(item => ({ ...item, verificationStatus: 'UNVERIFIED' })));
 
     return res.status(200).json({
       success: true,

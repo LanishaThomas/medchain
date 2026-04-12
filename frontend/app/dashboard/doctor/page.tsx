@@ -375,6 +375,21 @@ function DoctorDashboardContent() {
               </div>
             </div>
 
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-blue-900">Start Online Consultation</h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  Open Appointments to join approved sessions and start secure video consultation.
+                </p>
+              </div>
+              <button
+                onClick={() => router.push('/dashboard/doctor?section=appointments')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold"
+              >
+                Start Now
+              </button>
+            </div>
+
             {/* Activity summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl border border-slate-100 shadow-soft p-6">

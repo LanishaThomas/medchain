@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { authService } from '@/services/authService';
+import { useRouter } from 'next/navigation';
 
 interface Hospital {
   id: string;
@@ -84,6 +85,7 @@ const getAppointmentTypeLabel = (type: string) => {
 };
 
 export default function BookAppointmentComponent() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'book' | 'my-appointments'>('book');
   const [bookingStep, setBookingStep] = useState<'hospital' | 'doctor' | 'form'>('hospital');
   
@@ -109,6 +111,7 @@ export default function BookAppointmentComponent() {
     requestedTime: '',
     reason: '',
     symptoms: '',
+    consultationMode: 'offline',
     appointmentType: 'consultation',
     priority: 'normal'
   });
@@ -239,7 +242,7 @@ export default function BookAppointmentComponent() {
         requestedTime: formData.requestedTime,
         reason: formData.reason,
         symptoms: formData.symptoms.split(',').map(s => s.trim()).filter(s => s),
-        appointmentType: formData.appointmentType,
+        appointmentType: formData.consultationMode === 'online' ? 'telemedicine' : 'consultation',
         priority: formData.priority
       });
 
@@ -251,6 +254,7 @@ export default function BookAppointmentComponent() {
           requestedTime: '',
           reason: '',
           symptoms: '',
+          consultationMode: 'offline',
           appointmentType: 'consultation',
           priority: 'normal'
         });
@@ -618,21 +622,38 @@ export default function BookAppointmentComponent() {
                       </select>
                     </div>
 
-                    {/* Appointment Type */}
+                    {/* Consultation Mode */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Appointment Type
+                        Consultation Mode
                       </label>
-                      <select
-                        value={formData.appointmentType}
-                        onChange={(e) => setFormData({...formData, appointmentType: e.target.value})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                      >
-                        <option value="consultation">🩺 Consultation</option>
-                        <option value="follow_up">🔄 Follow-up Visit</option>
-                        <option value="checkup">📋 General Check-up</option>
-                        <option value="telemedicine">💻 Telemedicine (Online)</option>
-                      </select>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, consultationMode: 'offline', appointmentType: 'consultation' })}
+                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition ${
+                            formData.consultationMode === 'offline'
+                              ? 'bg-blue-50 border-blue-300 text-blue-700'
+                              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          Offline Consultation
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, consultationMode: 'online', appointmentType: 'telemedicine' })}
+                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition ${
+                            formData.consultationMode === 'online'
+                              ? 'bg-blue-50 border-blue-300 text-blue-700'
+                              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          Online Consultation
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Meet/Join options are available only for online consultations.
+                      </p>
                     </div>
 
                     {/* Priority */}
@@ -874,7 +895,7 @@ export default function BookAppointmentComponent() {
                         </div>
                       )}
 
-                      {apt.status === 'approved' && apt.meetingLink && (
+                      {apt.status === 'approved' && apt.appointmentType === 'telemedicine' && apt.meetingLink && (
                         <div className="p-3 bg-blue-50 rounded border border-blue-200 text-sm mb-3">
                           <strong>Meeting Link:</strong>{' '}
                           <a href={apt.meetingLink} target="_blank" className="text-blue-600 hover:underline">
@@ -884,12 +905,31 @@ export default function BookAppointmentComponent() {
                       )}
 
                       {canCancel && (
+                        <div className="flex flex-wrap gap-2">
+                          {apt.status === 'approved' && apt.appointmentType === 'telemedicine' && (
+                            <button
+                              onClick={() => router.push(`/dashboard/consultation/${apt.id}`)}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                            >
+                              Meet
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleCancelAppointment(apt.id)}
+                            disabled={processingId === apt.id}
+                            className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50 text-sm"
+                          >
+                            {processingId === apt.id ? '⏳' : '🚫'} Cancel Appointment
+                          </button>
+                        </div>
+                      )}
+
+                      {!canCancel && apt.status === 'approved' && apt.appointmentType === 'telemedicine' && (
                         <button
-                          onClick={() => handleCancelAppointment(apt.id)}
-                          disabled={processingId === apt.id}
-                          className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50 text-sm"
+                          onClick={() => router.push(`/dashboard/consultation/${apt.id}`)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
                         >
-                          {processingId === apt.id ? '⏳' : '🚫'} Cancel Appointment
+                          Meet
                         </button>
                       )}
                     </div>
