@@ -22,6 +22,7 @@ const prescriptionRoutes = require('./routes/prescriptionRoutes');
 const blockchainRoutes = require('./routes/blockchainRoutes');
 const consultationRoutes = require('./routes/consultationRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
 
@@ -83,6 +84,21 @@ app.use('/api/', limiter);
 app.use('/api/auth', authLimiter);
 
 // Body parsing
+// Capture raw body for Razorpay webhook signature verification BEFORE json parsing
+app.use((req, res, next) => {
+  if (req.path === '/api/payment/webhook') {
+    let data = '';
+    req.setEncoding('utf8');
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => {
+      req.rawBody = data;
+      try { req.body = JSON.parse(data); } catch { req.body = {}; }
+      next();
+    });
+  } else {
+    next();
+  }
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -125,6 +141,7 @@ app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/blockchain', blockchainRoutes);
 app.use('/api/consultations', consultationRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

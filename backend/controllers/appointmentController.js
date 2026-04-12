@@ -75,7 +75,8 @@ const requestAppointment = async (req, res) => {
       symptoms,
       appointmentType,
       priority,
-      duration
+      duration,
+      consultationType   // "online" | "offline"
     } = req.body;
 
     // Validate required fields
@@ -101,7 +102,7 @@ const requestAppointment = async (req, res) => {
 
     // Verify doctor exists and is approved at hospital
     console.log('🔍 Verifying doctor:', doctorId);
-    const doctor = await User.findOne({ _id: doctorId, role: 'doctor' });
+    const doctor = await User.findOne({ _id: doctorId, role: 'doctor' }).select('firstName lastName doctorProfile');
     if (!doctor) {
       console.log('❌ Doctor not found:', doctorId);
       return res.status(404).json({
@@ -150,6 +151,9 @@ const requestAppointment = async (req, res) => {
 
     // Create appointment request
     console.log('📝 Creating appointment...');
+    const isOnline = consultationType === 'online' || appointmentType === 'telemedicine';
+    const onlineFee = isOnline ? (doctor.doctorProfile?.onlineConsultationFee || 0) : 0;
+
     const appointment = new Appointment({
       patient: patientId,
       doctor: doctorId,
@@ -158,7 +162,11 @@ const requestAppointment = async (req, res) => {
       requestedTime,
       reason,
       symptoms: symptoms || [],
-      appointmentType: appointmentType || 'consultation',
+      appointmentType: isOnline ? 'telemedicine' : (appointmentType || 'consultation'),
+      consultationType: isOnline ? 'online' : 'offline',
+      paymentStatus: isOnline ? 'pending' : 'not_required',
+      amount: onlineFee,
+      currency: 'INR',
       priority: priority || 'normal',
       duration: duration || 30,
       status: 'pending',
@@ -285,6 +293,10 @@ const getMyAppointments = async (req, res) => {
         proposedTime: apt.proposedTime,
         reason: apt.reason,
         appointmentType: apt.appointmentType,
+        consultationType: apt.consultationType || 'offline',
+        paymentStatus: apt.paymentStatus || 'not_required',
+        amount: apt.amount || 0,
+        currency: apt.currency || 'INR',
         priority: apt.priority,
         status: apt.status,
         doctorResponse: apt.doctorResponse,

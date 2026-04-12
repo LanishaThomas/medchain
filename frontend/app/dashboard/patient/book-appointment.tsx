@@ -46,9 +46,7 @@ interface Appointment {
     specialization: string;
     phone?: string;
   };
-  hospital?: {
-    name: string;
-  };
+  hospital?: { name: string };
   requestedDate: string;
   requestedTime: string;
   approvedDate?: string;
@@ -57,6 +55,9 @@ interface Appointment {
   proposedTime?: string;
   reason: string;
   appointmentType: string;
+  consultationType?: 'online' | 'offline';
+  paymentStatus?: 'pending' | 'paid' | 'not_required';
+  amount?: number;
   priority: string;
   status: string;
   doctorResponse?: string;
@@ -246,6 +247,7 @@ export default function BookAppointmentComponent() {
         reason: formData.reason,
         symptoms: formData.symptoms.split(',').map(s => s.trim()).filter(s => s),
         appointmentType: formData.consultationMode === 'online' ? 'telemedicine' : 'consultation',
+        consultationType: formData.consultationMode === 'online' ? 'online' : 'offline',
         priority: formData.priority
       });
 
@@ -331,6 +333,67 @@ export default function BookAppointmentComponent() {
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to cancel appointment');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handlePayNow = async (apt: Appointment) => {
+    try {
+      setProcessingId(apt.id);
+      setError('');
+
+      // 1. Create Razorpay order on backend
+      const orderRes = await authService.client.post(`/payment/create-order/${apt.id}`);
+      const { orderId, amount, currency, key_id } = orderRes.data.data;
+
+      // 2. Load Razorpay checkout script dynamically
+      await new Promise<void>((resolve, reject) => {
+        if ((window as any).Razorpay) { resolve(); return; }
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Razorpay'));
+        document.body.appendChild(script);
+      });
+
+      // 3. Open Razorpay checkout
+      const options = {
+        key: key_id,
+        amount,
+        currency,
+        order_id: orderId,
+        name: 'MedChain',
+        description: `Online Consultation — ${apt.doctor.name}`,
+        handler: async (response: any) => {
+          try {
+            // 4. Verify signature on backend — NEVER trust frontend success alone
+            await authService.client.post('/payment/verify', {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
+            });
+            setSuccess('✅ Payment successful! You can now join the consultation.');
+            fetchMyAppointments();
+          } catch {
+            setError('Payment verification failed. Please contact support.');
+          }
+        },
+        modal: {
+          ondismiss: () => setProcessingId(null)
+        },
+        prefill: {},
+        theme: { color: '#2563eb' }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', (resp: any) => {
+        setError(`Payment failed: ${resp.error?.description || 'Unknown error'}`);
+        setProcessingId(null);
+      });
+      rzp.open();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to initiate payment');
     } finally {
       setProcessingId(null);
     }
@@ -1027,6 +1090,18 @@ export default function BookAppointmentComponent() {
                         </span>
                       </div>
 
+                      {/* Payment status badge for online appointments */}
+                      {apt.consultationType === 'online' && (
+                        <div className="mb-2">
+                          {apt.paymentStatus === 'paid' && (
+                            <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full font-semibold">💳 Paid</span>
+                          )}
+                          {apt.paymentStatus === 'pending' && (
+                            <span className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded-full font-semibold">💳 Payment Pending</span>
+                          )}
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
                         <div>
                           <p className="text-xs text-gray-500">DATE</p>
@@ -1069,7 +1144,19 @@ export default function BookAppointmentComponent() {
 
                       {canCancel && (
                         <div className="flex flex-wrap gap-2">
-                          {apt.status === 'approved' && apt.appointmentType === 'telemedicine' && (
+                          {/* Pay Now — online consultations awaiting payment */}
+                          {apt.consultationType === 'online' && apt.paymentStatus === 'pending' && apt.status === 'approved' && (
+                            <button
+                              onClick={() => handlePayNow(apt)}
+                              disabled={processingId === apt.id}
+                              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-semibold disabled:opacity-50"
+                            >
+                              {processingId === apt.id ? '⏳' : '💳'} {apt.amount > 0 ? `Pay ₹${apt.amount}` : 'Pay Now'}
+                            </button>
+                          )}
+                          {/* Meet — telemedicine that is approved AND either paid or no payment required */}
+                          {apt.status === 'approved' && apt.appointmentType === 'telemedicine' &&
+                            (apt.paymentStatus === 'paid' || apt.paymentStatus === 'not_required' || !apt.paymentStatus) && (
                             <button
                               onClick={() => router.push(`/dashboard/consultation/${apt.id}`)}
                               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
@@ -1087,7 +1174,8 @@ export default function BookAppointmentComponent() {
                         </div>
                       )}
 
-                      {!canCancel && apt.status === 'approved' && apt.appointmentType === 'telemedicine' && (
+                      {!canCancel && apt.status === 'approved' && apt.appointmentType === 'telemedicine' &&
+                        (apt.paymentStatus === 'paid' || apt.paymentStatus === 'not_required' || !apt.paymentStatus) && (
                         <button
                           onClick={() => router.push(`/dashboard/consultation/${apt.id}`)}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"

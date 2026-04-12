@@ -143,6 +143,20 @@ const appointmentSchema = new mongoose.Schema({
   meetingLink: {
     type: String
   },
+
+  // Payment fields (online consultations only)
+  consultationType: {
+    type: String,
+    enum: ['online', 'offline'],
+    default: 'offline'
+  },
+  paymentStatus: {
+    type: String,
+    enum: ['pending', 'paid', 'not_required'],
+    default: 'not_required'
+  },
+  amount: { type: Number, default: 0 },   // consultation fee in INR
+  currency: { type: String, default: 'INR' },
   
   // Reminders sent
   remindersSent: [{

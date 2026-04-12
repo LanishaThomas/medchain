@@ -223,6 +223,15 @@ async function joinConsultation(req, res, role) {
     });
   }
 
+  // Payment gate — online consultations require payment before joining
+  if (appointment.consultationType === 'online' && appointment.paymentStatus !== 'paid') {
+    return res.status(402).json({
+      success: false,
+      message: 'Payment required before joining this online consultation',
+      data: { paymentStatus: appointment.paymentStatus }
+    });
+  }
+
   const isProduction = process.env.NODE_ENV === 'production';
   if (isProduction && appointment.appointmentType !== 'telemedicine') {
     return res.status(400).json({
