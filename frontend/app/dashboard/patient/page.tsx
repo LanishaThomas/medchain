@@ -15,11 +15,16 @@ import PatientPrescriptionsComponent from './prescriptions';
 
 /* ─── Types ─────────────────────────────────────────── */
 interface AppointmentItem {
-  _id: string;
-  date: string;
-  doctor?: { fullName?: string; firstName?: string; lastName?: string };
+  id?: string;
+  _id?: string;
+  requestedDate?: string;
+  approvedDate?: string;
+  requestedTime?: string;
+  approvedTime?: string;
+  doctor?: { id?: string; name?: string; fullName?: string; firstName?: string; lastName?: string };
   status: string;
   reason?: string;
+  appointmentType?: string;
 }
 
 interface PrescriptionItem {
@@ -64,10 +69,15 @@ function PatientDashboardContent() {
           api.get('/prescriptions/patient'),
         ]);
 
-        const allAppts: AppointmentItem[] = apptRes.data?.data?.appointments || [];
+        const allAppts: AppointmentItem[] = apptRes.data?.data || [];
+        // Show pending + approved (not yet completed/cancelled) appointments
         const upcoming = allAppts
-          .filter(a => ['scheduled', 'rescheduled'].includes(a.status) && new Date(a.date) >= new Date())
-          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          .filter(a => ['pending', 'approved', 'rescheduled'].includes(a.status))
+          .sort((a, b) => {
+            const dateA = new Date(a.approvedDate || a.requestedDate || 0).getTime();
+            const dateB = new Date(b.approvedDate || b.requestedDate || 0).getTime();
+            return dateA - dateB;
+          })
           .slice(0, 3);
 
         const activePerms = (permRes.data?.data?.permissions || [])
@@ -86,9 +96,9 @@ function PatientDashboardContent() {
 
         const activities: ActivityItem[] = [
           ...allAppts.slice(0, 3).map(a => ({
-            id: a._id, icon: '📅',
-            description: `Appointment ${a.status === 'scheduled' ? 'booked' : a.status} — Dr. ${a.doctor?.fullName || a.doctor?.firstName || '—'}`,
-            time: a.date,
+            id: a.id || a._id || String(Math.random()), icon: '📅',
+            description: `Appointment ${a.status} — Dr. ${a.doctor?.name || a.doctor?.firstName || '—'}`,
+            time: a.approvedDate || a.requestedDate || new Date().toISOString(),
           })),
           ...allRx.slice(0, 2).map(r => ({
             id: r.id || r._id || String(Math.random()), icon: '💊',
@@ -132,9 +142,6 @@ function PatientDashboardContent() {
   );
   if (!user) return null;
 
-  const getDaysLeft = (d: string) => Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000);
-
-  /* ─── Derived section title ─────────────────────── */
   const sectionTitle: Record<string, string> = {
     records: 'My Medical Records', appointments: 'Appointments',
     prescriptions: 'My Prescriptions', permissions: 'Access Control',
@@ -236,34 +243,39 @@ function PatientDashboardContent() {
                 ) : (
                   <div className="space-y-3">
                     {upcomingAppointments.map(apt => {
-                      const days = getDaysLeft(apt.date);
-                      const barCls = days <= 1 ? 'bg-red-500' : days <= 3 ? 'bg-amber-500' : 'bg-role-primary';
-                      const tagCls = days <= 1
-                        ? 'bg-red-50 text-red-700'
-                        : days <= 3 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700';
+                      const displayDate = apt.approvedDate || apt.requestedDate;
+                      const displayTime = apt.approvedTime || apt.requestedTime;
+                      const statusColors: Record<string, string> = {
+                        pending: 'bg-amber-50 text-amber-700',
+                        approved: 'bg-green-50 text-green-700',
+                        rescheduled: 'bg-blue-50 text-blue-700',
+                      };
+                      const tagCls = statusColors[apt.status] || 'bg-slate-50 text-slate-600';
+                      const aptId = apt.id || apt._id || '';
                       return (
-                        <div key={apt._id}
+                        <div key={aptId}
                           className="flex items-center gap-3 p-3 bg-role-subtle rounded-xl border border-role">
-                          {/* Days countdown pill */}
-                          <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${barCls} text-white shadow-sm`}>
-                            <span className="text-2xl font-bold leading-none">{days <= 0 ? '!' : days}</span>
-                            <span className="text-[9px] font-medium">{days <= 0 ? 'today' : 'days'}</span>
+                          <div className="w-14 h-14 rounded-xl flex flex-col items-center justify-center flex-shrink-0 bg-role-primary text-white shadow-sm">
+                            <span className="text-lg leading-none">
+                              {apt.status === 'pending' ? '⏳' : apt.status === 'approved' ? '✅' : '📅'}
+                            </span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-800 truncate">
-                              Dr. {apt.doctor?.fullName || apt.doctor?.firstName || 'Doctor'}
+                              Dr. {apt.doctor?.name?.replace('Dr. ', '') || apt.doctor?.firstName || 'Doctor'}
                             </p>
                             <p className="text-xs text-slate-500">
-                              {new Date(apt.date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })}
-                              {' · '}
-                              {new Date(apt.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                              {displayDate
+                                ? new Date(displayDate).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
+                                : 'Date TBD'}
+                              {displayTime ? ` · ${displayTime}` : ''}
                             </p>
                             {apt.reason && (
                               <p className="text-xs text-slate-400 truncate mt-0.5">{apt.reason}</p>
                             )}
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded-full font-semibold flex-shrink-0 ${tagCls}`}>
-                            {days <= 0 ? 'Today' : `${days}d left`}
+                          <span className={`text-xs px-2 py-1 rounded-full font-semibold flex-shrink-0 capitalize ${tagCls}`}>
+                            {apt.status}
                           </span>
                         </div>
                       );

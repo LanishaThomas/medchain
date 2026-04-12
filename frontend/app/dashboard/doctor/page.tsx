@@ -53,7 +53,8 @@ function DoctorDashboardContent() {
   const [loggingOut, setLoggingOut]       = useState(false);
   const [selectedHospitalForDetails, setSelectedHospitalForDetails] = useState<HospitalApplication | null>(null);
   const [showHospitalModal, setShowHospitalModal] = useState(false);
-  const [stats, setStats] = useState({ appointments: 0, patients: 0, prescriptions: 0 });
+  const [stats, setStats] = useState({ pending: 0, approved: 0, patients: 0, prescriptions: 0 });
+  const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
 
   /* ─── Handlers ────────────────────────────────────── */
   const handleLogout = async () => {
@@ -95,15 +96,23 @@ function DoctorDashboardContent() {
           authService.client.get('/permissions/doctor/approved'),
           authService.client.get('/prescriptions/doctor'),
         ]);
-        const appointments = appointmentsRes.data?.data?.appointments || [];
-        const todayAppts = appointments.filter((a: any) => {
-          const apptDate = new Date(a.date).toDateString();
-          const today    = new Date().toDateString();
-          return apptDate === today && ['scheduled', 'rescheduled'].includes(a.status);
-        });
+        const appointments: any[] = appointmentsRes.data?.data || [];
+        const pending  = appointments.filter((a: any) => a.status === 'pending').length;
+        const approved = appointments.filter((a: any) => a.status === 'approved').length;
+        // upcoming = pending + approved, sorted by date
+        const upcoming = appointments
+          .filter((a: any) => ['pending', 'approved', 'rescheduled'].includes(a.status))
+          .sort((a: any, b: any) => {
+            const da = new Date(a.approvedDate || a.requestedDate || 0).getTime();
+            const db = new Date(b.approvedDate || b.requestedDate || 0).getTime();
+            return da - db;
+          })
+          .slice(0, 5);
+        setUpcomingAppointments(upcoming);
         setStats({
-          appointments: todayAppts.length,
-          patients: patientsRes.data?.data?.permissions?.length || 0,
+          pending,
+          approved,
+          patients: patientsRes.data?.data?.count || patientsRes.data?.data?.permissions?.length || 0,
           prescriptions: prescriptionsRes.data?.count || 0,
         });
       } catch (err) {
@@ -354,9 +363,14 @@ function DoctorDashboardContent() {
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="stat-card">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Appointments</p>
-                <p className="text-3xl font-bold text-role-primary">{stats.appointments}</p>
-                <p className="text-xs text-slate-400 mt-1">Today</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Pending</p>
+                <p className="text-3xl font-bold text-amber-500">{stats.pending}</p>
+                <p className="text-xs text-slate-400 mt-1">Awaiting action</p>
+              </div>
+              <div className="stat-card">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Approved</p>
+                <p className="text-3xl font-bold text-role-primary">{stats.approved}</p>
+                <p className="text-xs text-slate-400 mt-1">Confirmed</p>
               </div>
               <div className="stat-card">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Patients</p>
@@ -366,12 +380,7 @@ function DoctorDashboardContent() {
               <div className="stat-card">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Prescriptions</p>
                 <p className="text-3xl font-bold text-role-dark">{stats.prescriptions}</p>
-                <p className="text-xs text-slate-400 mt-1">This week</p>
-              </div>
-              <div className="stat-card">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Hospitals</p>
-                <p className="text-3xl font-bold text-role-primary">{approvalData?.summary.approved || 0}</p>
-                <p className="text-xs text-slate-400 mt-1">Approved</p>
+                <p className="text-xs text-slate-400 mt-1">Total issued</p>
               </div>
             </div>
 
@@ -394,27 +403,50 @@ function DoctorDashboardContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl border border-slate-100 shadow-soft p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-semibold text-slate-800">📅 Today&apos;s Schedule</h3>
+                  <h3 className="text-base font-semibold text-slate-800">📅 Upcoming Appointments</h3>
                   <a href="/dashboard/doctor?section=appointments"
                     className="text-xs font-semibold text-role-primary hover:underline">Manage →</a>
                 </div>
-                {stats.appointments === 0 ? (
+                {loadingStatus ? (
+                  <div className="space-y-3">
+                    {[1,2,3].map(i=><div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse"/>)}
+                  </div>
+                ) : upcomingAppointments.length === 0 ? (
                   <div className="text-center py-6">
                     <div className="text-4xl mb-2">📅</div>
-                    <p className="text-slate-500 text-sm">No appointments scheduled for today</p>
+                    <p className="text-slate-500 text-sm">No pending or upcoming appointments</p>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-4 p-4 bg-role-subtle rounded-xl border border-role">
-                    <div className="w-14 h-14 rounded-xl bg-role-primary flex flex-col items-center justify-center text-white flex-shrink-0">
-                      <span className="text-2xl font-bold leading-none">{stats.appointments}</span>
-                      <span className="text-[9px]">today</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {stats.appointments} appointment{stats.appointments !== 1 ? 's' : ''} today
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">Review and manage in Appointments tab</p>
-                    </div>
+                  <div className="space-y-2">
+                    {upcomingAppointments.map((apt: any) => {
+                      const displayDate = apt.approvedDate || apt.requestedDate;
+                      const displayTime = apt.approvedTime || apt.requestedTime;
+                      const statusColors: Record<string, string> = {
+                        pending: 'bg-amber-50 text-amber-700',
+                        approved: 'bg-green-50 text-green-700',
+                        rescheduled: 'bg-blue-50 text-blue-700',
+                      };
+                      const tagCls = statusColors[apt.status] || 'bg-slate-50 text-slate-600';
+                      return (
+                        <div key={apt.id || apt._id} className="flex items-center gap-3 p-3 bg-role-subtle rounded-xl border border-role">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">
+                              {apt.patient?.name || `${apt.patient?.firstName || ''} ${apt.patient?.lastName || ''}`.trim() || 'Patient'}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {displayDate
+                                ? new Date(displayDate).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
+                                : 'Date TBD'}
+                              {displayTime ? ` · ${displayTime}` : ''}
+                            </p>
+                            {apt.reason && <p className="text-xs text-slate-400 truncate mt-0.5">{apt.reason}</p>}
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded-full font-semibold flex-shrink-0 capitalize ${tagCls}`}>
+                            {apt.status}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
