@@ -12,6 +12,8 @@
   "license": "ISC",
   "description": "MedChain Backend - Production Healthcare System",
   "dependencies": {
+    "@getbrevo/brevo": "^5.0.4",
+    "@supabase/supabase-js": "^2.103.0",
     "agora-access-token": "^2.0.4",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^1.41.3",

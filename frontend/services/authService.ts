@@ -423,6 +423,18 @@ class AuthService {
       headers: this.getAuthHeader()
     });
   }
+
+  async resendVerificationEmail() {
+    return this.client.post('/auth/resend-verification', {}, {
+      headers: this.getAuthHeader()
+    });
+  }
+
+  async getVerificationStatus() {
+    return this.client.get('/auth/verification-status', {
+      headers: this.getAuthHeader()
+    });
+  }
 }
 
 export const authService = new AuthService();

@@ -236,6 +236,32 @@ router.get(
 );
 
 // ============================================
+// EMAIL VERIFICATION (Supabase layer)
+// ============================================
+
+/**
+ * @route   POST /api/auth/resend-verification
+ * @desc    Resend Supabase verification email
+ * @access  Private
+ */
+router.post(
+  "/resend-verification",
+  protect,
+  authController.resendVerification
+);
+
+/**
+ * @route   GET /api/auth/verification-status
+ * @desc    Get email verification status
+ * @access  Private
+ */
+router.get(
+  "/verification-status",
+  protect,
+  authController.getVerificationStatus
+);
+
+// ============================================
 // TEST ROUTES
 // ============================================
 

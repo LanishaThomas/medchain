@@ -5,6 +5,22 @@ const DoctorHospitalMapping = require('../models/DoctorHospitalMapping');
 const { generateAuthTokens, hashRefreshToken } = require('../utils/jwt');
 const { writeAuditLog } = require('../services/blockchainAuditService');
 const { getVerificationStatusForEntity } = require('../services/entityVerificationService');
+const { createSupabaseUser } = require('../services/supabaseService');
+
+/**
+ * Fire-and-forget Supabase user creation after MongoDB registration.
+ * Errors are logged but never propagate — registration must not fail.
+ */
+const attachSupabaseVerification = async (mongoUser, password) => {
+  try {
+    const { supabaseUserId } = await createSupabaseUser(mongoUser.email, password);
+    await User.findByIdAndUpdate(mongoUser._id, { supabaseUserId });
+    console.log(`[Supabase] Verification email sent to ${mongoUser.email}`);
+  } catch (err) {
+    console.error(`[Supabase] Failed to create verification user for ${mongoUser.email}:`, err.message);
+    // Non-fatal — user can retry via /api/auth/resend-verification
+  }
+};
 
 // ============================================
 // HOSPITAL REGISTRATION
@@ -112,6 +128,9 @@ exports.registerHospital = async (req, res, next) => {
 
     console.log('Refresh token stored, hospital registration complete');
 
+    // Supabase: send verification email to hospital admin (non-blocking)
+    attachSupabaseVerification(adminUser, adminPassword);
+
     const actorId = adminUser._id.toString();
     await writeAuditLog({
       entityType: 'HOSPITAL_PROFILE',
@@ -154,7 +173,7 @@ exports.registerHospital = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Hospital registered successfully',
+      message: 'Hospital registered successfully. A verification email has been sent — please check your inbox.',
       data: {
         hospital: {
           id: hospital._id,
@@ -167,7 +186,8 @@ exports.registerHospital = async (req, res, next) => {
           id: adminUser._id,
           email: adminUser.email,
           fullName: adminUser.fullName,
-          role: adminUser.role
+          role: adminUser.role,
+          emailVerificationRequired: true
         },
         tokens: {
           accessToken: tokens.accessToken,
@@ -293,6 +313,9 @@ exports.registerDoctor = async (req, res, next) => {
     doctor.addRefreshToken(tokens.refreshToken, req.headers['user-agent'], req.ip);
     await doctor.save();
 
+    // Supabase: send verification email (non-blocking)
+    attachSupabaseVerification(doctor, password);
+
     const actorId = doctor._id.toString();
     await writeAuditLog({
       entityType: 'USER_PROFILE',
@@ -352,7 +375,7 @@ exports.registerDoctor = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Awaiting hospital approval.',
+      message: 'Registration successful. Awaiting hospital approval. A verification email has been sent — please check your inbox.',
       data: {
         user: {
           id: doctor._id,
@@ -454,6 +477,9 @@ exports.registerPatient = async (req, res, next) => {
     patient.addRefreshToken(tokens.refreshToken, req.headers['user-agent'], req.ip);
     await patient.save();
 
+    // Supabase: send verification email (non-blocking)
+    attachSupabaseVerification(patient, password);
+
     await writeAuditLog({
       entityType: 'USER_PROFILE',
       entityId: patient._id.toString(),
@@ -481,14 +507,15 @@ exports.registerPatient = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Patient registered successfully',
+      message: 'Patient registered successfully. A verification email has been sent — please check your inbox.',
       data: {
         user: {
           id: patient._id,
           email: patient.email,
           firstName: patient.firstName,
           lastName: patient.lastName,
-          role: patient.role
+          role: patient.role,
+          emailVerificationRequired: true
         },
         tokens
       }
@@ -956,6 +983,30 @@ exports.login = async (req, res, next) => {
 
     // Reset login attempts on success
     await user.resetLoginAttempts();
+
+    // Email verification check (Supabase layer)
+    // Only block if user has a supabaseUserId (i.e. registered after Supabase was integrated)
+    const userWithSupabase = await User.findById(user._id).select('+supabaseUserId');
+    if (userWithSupabase?.supabaseUserId && !user.isEmailVerified) {
+      try {
+        const { checkEmailVerified } = require('./services/supabaseService');
+        const verified = await checkEmailVerified({ supabaseUserId: userWithSupabase.supabaseUserId });
+        if (verified) {
+          // Sync the flag
+          await User.findByIdAndUpdate(user._id, { isEmailVerified: true });
+        } else {
+          return res.status(403).json({
+            success: false,
+            emailVerificationRequired: true,
+            email: user.email,
+            message: 'Please verify your email before logging in. Check your inbox for the verification link.'
+          });
+        }
+      } catch (supabaseErr) {
+        // Supabase down — log and allow login (non-fatal)
+        console.error('[Login] Supabase verification check failed, allowing login:', supabaseErr.message);
+      }
+    }
 
     // For doctors, check hospital approval status
     let hospitalInfo = null;
@@ -1436,6 +1487,101 @@ exports.getHospitalsDebug = async (req, res, next) => {
           location: h.address ? `${h.address.city}, ${h.address.state}` : 'Location not specified',
           bedCount: h.bedCount
         }))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================
+// RESEND VERIFICATION EMAIL
+// ============================================
+
+/**
+ * @desc    Resend Supabase verification email
+ * @route   POST /api/auth/resend-verification
+ * @access  Private
+ */
+exports.resendVerification = async (req, res, next) => {
+  try {
+    const { resendVerificationEmail, checkEmailVerified } = require('../services/supabaseService');
+
+    const user = await User.findById(req.user.id).select('+supabaseUserId');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    // Check if already verified
+    if (user.supabaseUserId) {
+      const verified = await checkEmailVerified({ supabaseUserId: user.supabaseUserId });
+      if (verified) {
+        // Sync flag
+        await User.findByIdAndUpdate(user._id, { isEmailVerified: true });
+        return res.status(200).json({
+          success: true,
+          message: 'Your email is already verified.'
+        });
+      }
+    }
+
+    await resendVerificationEmail(user.email);
+
+    res.status(200).json({
+      success: true,
+      message: 'Verification email resent. Please check your inbox.'
+    });
+  } catch (error) {
+    console.error('[resendVerification] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to resend verification email. Please try again later.'
+    });
+  }
+};
+
+// ============================================
+// EMAIL VERIFICATION STATUS
+// ============================================
+
+/**
+ * @desc    Check current email verification status
+ * @route   GET /api/auth/verification-status
+ * @access  Private
+ */
+exports.getVerificationStatus = async (req, res, next) => {
+  try {
+    const { checkEmailVerified, confirmUserEmail } = require('../services/supabaseService');
+
+    const user = await User.findById(req.user.id).select('+supabaseUserId isEmailVerified email');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    let verified = user.isEmailVerified;
+
+    // Re-check Supabase if not yet marked verified
+    if (!verified && user.supabaseUserId) {
+      try {
+        verified = await checkEmailVerified({ supabaseUserId: user.supabaseUserId });
+        if (verified) {
+          // Force-confirm in Supabase and sync MongoDB flag
+          try { await confirmUserEmail(user.supabaseUserId); } catch (_) {}
+          await User.findByIdAndUpdate(user._id, { isEmailVerified: true });
+        }
+      } catch (err) {
+        console.error('[getVerificationStatus] Supabase check failed:', err.message);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        email: user.email,
+        isEmailVerified: verified,
+        supabaseLinked: !!user.supabaseUserId
       }
     });
   } catch (error) {

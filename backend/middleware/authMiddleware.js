@@ -259,3 +259,50 @@ exports.isPatient = (req, res, next) => {
   }
   next();
 };
+
+/**
+ * Verify email middleware (Supabase layer)
+ * Blocks sensitive actions until the user has confirmed their email.
+ * Must be used AFTER protect middleware.
+ * Non-fatal: if Supabase is unreachable, logs the error and allows through
+ * to avoid breaking the system.
+ */
+exports.verifyEmail = async (req, res, next) => {
+  try {
+    const { checkEmailVerified } = require('../services/supabaseService');
+    const dbUser = await User.findById(req.user.id).select('supabaseUserId email isEmailVerified');
+
+    if (!dbUser) {
+      return res.status(401).json({ success: false, message: 'User not found.' });
+    }
+
+    // If no supabaseUserId, Supabase was not configured at registration time — allow through
+    if (!dbUser.supabaseUserId) {
+      return next();
+    }
+
+    const verified = await checkEmailVerified({
+      supabaseUserId: dbUser.supabaseUserId,
+      email: dbUser.email
+    });
+
+    if (!verified) {
+      return res.status(403).json({
+        success: false,
+        emailVerificationRequired: true,
+        message: 'Please verify your email to continue.'
+      });
+    }
+
+    // Sync isEmailVerified flag in MongoDB if not already set
+    if (!dbUser.isEmailVerified) {
+      await User.findByIdAndUpdate(dbUser._id, { isEmailVerified: true });
+    }
+
+    next();
+  } catch (error) {
+    // Supabase failure must not break the system
+    console.error('[verifyEmail middleware] Supabase check failed, allowing through:', error.message);
+    next();
+  }
+};

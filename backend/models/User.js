@@ -184,6 +184,13 @@ const userSchema = new mongoose.Schema({
   lastLogin: Date,
   lastLoginIp: String,
   
+  // Supabase email verification reference (optional — added non-destructively)
+  supabaseUserId: {
+    type: String,
+    sparse: true,
+    select: false
+  },
+
   // Wallet for Blockchain
   walletAddress: {
     type: String,

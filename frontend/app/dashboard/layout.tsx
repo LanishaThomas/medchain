@@ -1,14 +1,63 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
+import { authService } from '@/services/authService';
 
 /**
- * Next.js App Router layout for ALL /dashboard/* routes.
- * Non-invasive: each dashboard page (patient, doctor, hospital) keeps its
- * own tab state and content — this layout just wraps them with the sidebar.
+ * Dashboard root layout — guards ALL /dashboard/* routes.
+ * 1. Redirects to /auth/login if no token.
+ * 2. Redirects to /auth/login if email is not verified (Supabase check).
  */
-export default function DashboardRootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardRootLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const guard = async () => {
+      // No token → go to login
+      const token = authService.getAccessToken();
+      if (!token || authService.isTokenExpired()) {
+        router.replace('/auth/login');
+        return;
+      }
+
+      // Check email verification
+      try {
+        const res = await authService.getVerificationStatus();
+        const { isEmailVerified, supabaseLinked } = res.data?.data ?? {};
+
+        // Only block if this user is linked to Supabase (registered after integration)
+        if (supabaseLinked && !isEmailVerified) {
+          // Clear tokens so they can't bypass by refreshing
+          authService.clearTokens();
+          router.replace('/auth/login?reason=unverified');
+          return;
+        }
+      } catch {
+        // If the check fails (network/Supabase down), allow through
+      }
+
+      setReady(true);
+    };
+
+    guard();
+  }, [router]);
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <svg className="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          <span className="text-sm">Checking access...</span>
+        </div>
+      </div>
+    );
+  }
+
   return <DashboardLayout>{children}</DashboardLayout>;
 }

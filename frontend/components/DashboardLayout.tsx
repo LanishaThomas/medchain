@@ -3,6 +3,7 @@
 import { useState, useCallback, Suspense } from 'react';
 import Sidebar from './Sidebar';
 import NotificationBell from './NotificationPanel';
+import EmailVerificationBanner from './EmailVerificationBanner';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -80,6 +81,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">
+          <div className="px-4 lg:px-6 pt-4">
+            <EmailVerificationBanner />
+          </div>
           {children}
         </main>
       </div>

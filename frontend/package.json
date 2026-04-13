@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.0",
     "agora-rtc-sdk-ng": "^4.23.2",
     "axios": "^1.7.2",
     "jwt-decode": "^4.0.0",

@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { authService } from '@/services/authService';
 
@@ -50,6 +49,60 @@ export default function LoginPage() {
   const [success, setSuccess] = useState('');
   const { login } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // If redirected from dashboard guard with ?reason=unverified, show the wall
+  useEffect(() => {
+    if (searchParams.get('reason') === 'unverified') {
+      const stored = localStorage.getItem('user');
+      const storedEmail = stored ? JSON.parse(stored).email : '';
+      if (storedEmail) setVerificationWall({ email: storedEmail });
+    }
+  }, [searchParams]);
+
+  // ── Email verification wall ──────────────────────────────────────────────
+  // When true, we show the "check your inbox" screen instead of the dashboard
+  const [verificationWall, setVerificationWall] = useState<{ email: string } | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState('');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Poll every 4 seconds to detect when user clicks the link in their email
+  useEffect(() => {
+    if (!verificationWall) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await authService.getVerificationStatus();
+        if (res.data?.data?.isEmailVerified) {
+          clearInterval(pollRef.current!);
+          // Redirect to the right dashboard
+          const stored = localStorage.getItem('user');
+          const role = stored ? JSON.parse(stored).role : null;
+          router.push(getDashboardPath(role));
+        }
+      } catch { /* ignore */ }
+    }, 4000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [verificationWall, router]);
+
+  const getDashboardPath = (role: string | null) => {
+    if (role === 'doctor') return '/dashboard/doctor';
+    if (role === 'hospital_admin') return '/dashboard/hospital';
+    return '/dashboard/patient';
+  };
+
+  const handleResendEmail = async () => {
+    setResending(true);
+    setResendMsg('');
+    try {
+      await authService.resendVerificationEmail();
+      setResendMsg('Email sent! Check your inbox (and spam folder).');
+    } catch {
+      setResendMsg('Failed to resend. Please try again.');
+    } finally {
+      setResending(false);
+    }
+  };
 
   const fetchHospitals = async () => {
     try {
@@ -81,10 +134,17 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      // Redirect based on user type (the backend determines actual role)
-      router.push('/');
+      const stored = localStorage.getItem('user');
+      const role = stored ? JSON.parse(stored).role : null;
+      router.push(getDashboardPath(role));
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      const data = err.response?.data;
+      if (data?.emailVerificationRequired) {
+        // Show verification wall — tokens were NOT issued, user must verify first
+        setVerificationWall({ email: data.email || email });
+        return;
+      }
+      setError(data?.message || 'Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -109,8 +169,7 @@ export default function LoginPage() {
         dateOfBirth: dateOfBirth || undefined,
         gender: gender || undefined
       });
-      setSuccess('Registration successful! Redirecting...');
-      setTimeout(() => router.push('/dashboard/patient'), 1000);
+      setVerificationWall({ email });
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed');
     } finally {
@@ -160,8 +219,7 @@ export default function LoginPage() {
       };
       console.log('📤 Doctor registration data:', doctorData);
       await authService.registerDoctor(doctorData);
-      setSuccess('Registration submitted! Awaiting hospital approval...');
-      setTimeout(() => router.push('/dashboard/doctor'), 2000);
+      setVerificationWall({ email });
     } catch (err: any) {
       const errorData = err.response?.data;
       console.error('❌ Registration error full:', errorData);
@@ -208,8 +266,7 @@ export default function LoginPage() {
         adminEmail: email,
         adminPassword: password
       });
-      setSuccess('Hospital registered! Redirecting...');
-      setTimeout(() => router.push('/dashboard/hospital'), 1000);
+      setVerificationWall({ email });
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed');
     } finally {
@@ -249,6 +306,67 @@ export default function LoginPage() {
       <path strokeLinecap="round" strokeLinejoin="round" d="m15 12-3-3m-3 3 3 3m1.5-6L6.5 17.5" />
     </svg>
   );
+
+  // ── Email Verification Wall ──────────────────────────────────────────────
+  if (verificationWall) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center">
+          {/* Icon */}
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-5">
+            <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Check your inbox</h2>
+          <p className="text-gray-500 mb-1 text-sm">We sent a verification link to</p>
+          <p className="font-semibold text-gray-800 mb-6 break-all">{verificationWall.email}</p>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-left text-sm text-amber-800">
+            <p className="font-medium mb-1">Before you can access the dashboard:</p>
+            <ol className="list-decimal list-inside space-y-1 text-amber-700">
+              <li>Open the email from MedChain / Supabase</li>
+              <li>Click the <span className="font-medium">Confirm your email</span> link</li>
+              <li>This page will automatically redirect you</li>
+            </ol>
+          </div>
+
+          {/* Resend */}
+          <button
+            onClick={handleResendEmail}
+            disabled={resending}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold py-2.5 rounded-xl transition-colors mb-3"
+          >
+            {resending ? 'Sending...' : 'Resend verification email'}
+          </button>
+
+          {resendMsg && (
+            <p className={`text-sm mb-3 ${resendMsg.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>
+              {resendMsg}
+            </p>
+          )}
+
+          <p className="text-xs text-gray-400">
+            Waiting for verification
+            <span className="inline-flex gap-0.5 ml-1">
+              <span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
+              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span>
+              <span className="animate-bounce" style={{ animationDelay: '300ms' }}>.</span>
+            </span>
+          </p>
+
+          <button
+            onClick={() => { setVerificationWall(null); setError(''); }}
+            className="mt-4 text-xs text-gray-400 hover:text-gray-600 underline"
+          >
+            Back to login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Role Selection Screen
   if (!userType) {
