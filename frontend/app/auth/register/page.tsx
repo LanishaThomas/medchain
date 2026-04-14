@@ -218,7 +218,7 @@ export default function RegisterPage() {
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg mb-6">
               <p className="text-sm text-red-700">
-                {typeof error === 'string' ? error : (error?.message || JSON.stringify(error))}
+                {typeof error === 'string' ? error : JSON.stringify(error)}
               </p>
             </div>
           )}
