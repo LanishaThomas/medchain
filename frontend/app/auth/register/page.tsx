@@ -92,7 +92,7 @@ export default function RegisterPage() {
     licenseNumber: '',
     licenseState: '',
     licenseExpiry: '',
-    specializations: [],
+    specializations: [] as string[],
     yearsOfExperience: 0,
     bio: '',
     hospitalId: '',
