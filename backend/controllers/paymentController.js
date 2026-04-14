@@ -14,6 +14,7 @@ const Razorpay = require('razorpay');
 const Appointment = require('../models/Appointment');
 const Payment = require('../models/Payment');
 const User = require('../models/User');
+const { reAuditConsultation } = require('../services/consultationAuditService');
 
 // ─── Razorpay client (lazy-init so missing keys don't crash on import) ────────
 function getRazorpay() {
@@ -238,6 +239,15 @@ exports.verifyPayment = async (req, res) => {
     });
 
     console.log(`[Payment] Verified: ${razorpay_payment_id} for order ${razorpay_order_id}`);
+
+    // Re-audit consultation if it's already completed (payment confirmed after end)
+    const Consultation = require('../models/Consultation');
+    const consultation = await Consultation.findOne({ appointmentId: payment.appointmentId });
+    if (consultation?.status === 'completed') {
+      reAuditConsultation(consultation._id.toString()).catch(err =>
+        console.error('[ConsultationAudit] Re-audit after payment failed:', err.message)
+      );
+    }
 
     return res.status(200).json({ success: true, message: 'Payment verified successfully' });
   } catch (err) {

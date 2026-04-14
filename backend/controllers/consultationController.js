@@ -5,6 +5,7 @@ const {
   createConsultationRoom,
   generateJoinToken
 } = require('../services/videoSessionService');
+const { auditConsultationCompletion } = require('../services/consultationAuditService');
 
 function parseTimeToHoursMinutes(timeText) {
   if (!timeText) {
@@ -389,6 +390,20 @@ exports.endConsultation = async (req, res) => {
       }
     );
 
+    // ── Blockchain audit (online consultations only) ───────────────────────
+    let blockchainAudit = null;
+    if (appointment.consultationType === 'online') {
+      try {
+        blockchainAudit = await auditConsultationCompletion(consultation, appointment);
+      } catch (auditErr) {
+        // Log but never fail the end-consultation response
+        console.error(
+          `[ConsultationAudit] ⚠️  Blockchain write failed for consultation ${consultation._id}:`,
+          auditErr.message
+        );
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Consultation ended successfully',
@@ -397,7 +412,17 @@ exports.endConsultation = async (req, res) => {
         status: consultation.status,
         startTime: consultation.startTime,
         endTime: consultation.endTime,
-        expiredPermissions: expireResult.modifiedCount || 0
+        expiredPermissions: expireResult.modifiedCount || 0,
+        blockchain: blockchainAudit
+          ? {
+              anchored: true,
+              txHash: blockchainAudit.blockchainTxHash,
+              dataHash: blockchainAudit.dataHash,
+              blockNumber: blockchainAudit.blockNumber
+            }
+          : appointment.consultationType === 'online'
+            ? { anchored: false, reason: 'Blockchain write failed — will retry on next update' }
+            : { anchored: false, reason: 'Offline consultation — not audited on-chain' }
       }
     });
   } catch (error) {

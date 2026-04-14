@@ -47,6 +47,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
+
+    // Re-read user from localStorage when dashboard layout refreshes it
+    const onStorage = () => {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        try { setUser(JSON.parse(userData)); } catch { /* ignore */ }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const login = async (email: string, password: string) => {

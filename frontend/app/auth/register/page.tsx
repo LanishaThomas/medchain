@@ -162,6 +162,9 @@ export default function RegisterPage() {
         <div className="w-full max-w-2xl">
           <div className="bg-white rounded-lg shadow-xl p-8">
             <div className="mb-8">
+              <div className="flex justify-center mb-3">
+                <img src="/logo.png" alt="MedChain" className="h-14 w-14 object-contain" />
+              </div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">MedChain</h1>
               <p className="text-gray-600">Register your account</p>
             </div>

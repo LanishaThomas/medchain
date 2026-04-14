@@ -1,9 +1,10 @@
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Hospital = require('../models/Hospital');
 const DoctorHospitalMapping = require('../models/DoctorHospitalMapping');
 const { generateAuthTokens, hashRefreshToken } = require('../utils/jwt');
-const { writeAuditLog } = require('../services/blockchainAuditService');
+const { writeAuditLog, buildDeterministicHash } = require('../services/blockchainAuditService');
 const { getVerificationStatusForEntity } = require('../services/entityVerificationService');
 const { createSupabaseUser } = require('../services/supabaseService');
 
@@ -73,21 +74,82 @@ exports.registerHospital = async (req, res, next) => {
 
     console.log('Creating admin user with email:', adminEmail);
 
-    // Create admin user first
+    // ── Pre-generate IDs so we can hash before writing to MongoDB ────────────
+    const adminUserId = new mongoose.Types.ObjectId();
+    const hospitalId  = new mongoose.Types.ObjectId();
+
+    // ── Build deterministic data payloads ────────────────────────────────────
+    const hospitalData = {
+      id: hospitalId.toString(),
+      name: hospitalName,
+      registrationNumber,
+      licenseNumber,
+      email: hospitalEmail,
+      phone: hospitalPhone,
+      address,
+      type: hospitalType || 'general',
+      specialties: specialties || []
+    };
+
+    const adminUserData = {
+      id: adminUserId.toString(),
+      role: 'hospital_admin',
+      email: adminEmail,
+      firstName: adminFirstName,
+      lastName: adminLastName,
+      hospitalId: hospitalId.toString()
+    };
+
+    // ── Write blockchain FIRST — if this fails, nothing is stored ─────────────
+    let hospitalAuditDoc, adminAuditDoc;
+    try {
+      hospitalAuditDoc = await writeAuditLog({
+        entityType: 'HOSPITAL_PROFILE',
+        entityId: hospitalId.toString(),
+        actorId: adminUserId.toString(),
+        actionType: 'CREATE',
+        data: hospitalData,
+        metadata: { role: 'hospital_admin' }
+      });
+
+      adminAuditDoc = await writeAuditLog({
+        entityType: 'USER_PROFILE',
+        entityId: adminUserId.toString(),
+        actorId: adminUserId.toString(),
+        actionType: 'CREATE',
+        data: adminUserData,
+        metadata: { role: 'hospital_admin' }
+      });
+    } catch (blockchainErr) {
+      console.error('🔴 Blockchain write failed — registration aborted:', blockchainErr.message);
+      return res.status(503).json({
+        success: false,
+        message: 'Registration failed: could not write to blockchain. Please try again.',
+        details: blockchainErr.code === 'INSUFFICIENT_FUNDS'
+          ? 'Blockchain wallet has insufficient funds.'
+          : blockchainErr.message
+      });
+    }
+
+    // ── Blockchain succeeded — now persist to MongoDB ─────────────────────────
     const adminUser = await User.create({
+      _id: adminUserId,
       email: adminEmail,
       password: adminPassword,
       phone: adminPhone,
       firstName: adminFirstName,
       lastName: adminLastName,
       role: 'hospital_admin',
-      isEmailVerified: false // Require email verification
+      isEmailVerified: false,
+      blockchainHash: adminAuditDoc.dataHash,
+      blockchainTxHash: adminAuditDoc.blockchainTxHash
     });
 
     console.log('Admin user created:', adminUser._id);
 
     // Create hospital with admin reference
     const hospital = await Hospital.create({
+      _id: hospitalId,
       name: hospitalName,
       registrationNumber,
       licenseNumber,
@@ -99,9 +161,11 @@ exports.registerHospital = async (req, res, next) => {
       specialties: specialties || [],
       description,
       primaryAdmin: adminUser._id,
-      verificationStatus: 'verified', // Auto-verified
+      verificationStatus: 'verified',
       verifiedAt: new Date(),
-      isActive: true // Explicitly set to active
+      isActive: true,
+      blockchainHash: hospitalAuditDoc.dataHash,
+      blockchainTxHash: hospitalAuditDoc.blockchainTxHash
     });
 
     console.log('✅ Hospital created:', { 
@@ -130,46 +194,6 @@ exports.registerHospital = async (req, res, next) => {
 
     // Supabase: send verification email to hospital admin (non-blocking)
     attachSupabaseVerification(adminUser, adminPassword);
-
-    const actorId = adminUser._id.toString();
-    await writeAuditLog({
-      entityType: 'HOSPITAL_PROFILE',
-      entityId: hospital._id.toString(),
-      actorId,
-      actionType: 'CREATE',
-      data: {
-        id: hospital._id.toString(),
-        name: hospital.name,
-        registrationNumber: hospital.registrationNumber,
-        licenseNumber: hospital.licenseNumber,
-        email: hospital.email,
-        phone: hospital.phone,
-        address: hospital.address,
-        type: hospital.type,
-        specialties: hospital.specialties || []
-      },
-      metadata: {
-        role: 'hospital_admin'
-      }
-    });
-
-    await writeAuditLog({
-      entityType: 'USER_PROFILE',
-      entityId: adminUser._id.toString(),
-      actorId,
-      actionType: 'CREATE',
-      data: {
-        id: adminUser._id.toString(),
-        role: adminUser.role,
-        email: adminUser.email,
-        firstName: adminUser.firstName,
-        lastName: adminUser.lastName,
-        hospitalId: hospital._id.toString()
-      },
-      metadata: {
-        role: 'hospital_admin'
-      }
-    });
 
     res.status(201).json({
       success: true,
@@ -274,14 +298,80 @@ exports.registerDoctor = async (req, res, next) => {
       });
     }
 
+    // ── Pre-generate IDs ──────────────────────────────────────────────────────
+    const doctorId  = new mongoose.Types.ObjectId();
+    const mappingId = new mongoose.Types.ObjectId();
+    const appliedAt = new Date();
+
+    const doctorData = {
+      id: doctorId.toString(),
+      role: 'doctor',
+      email,
+      firstName,
+      lastName,
+      doctorProfile: {
+        licenseNumber,
+        licenseState,
+        licenseExpiry: licenseExpiry ? new Date(licenseExpiry).toISOString() : null,
+        specializations: specializations || [],
+        yearsOfExperience,
+        bio
+      }
+    };
+
+    const mappingData = {
+      mappingId: mappingId.toString(),
+      doctorId: doctorId.toString(),
+      hospitalId: hospital._id.toString(),
+      status: 'pending',
+      employmentType: employmentType || 'full_time',
+      department,
+      appliedAt
+    };
+
+    // ── Blockchain FIRST ──────────────────────────────────────────────────────
+    let doctorAuditDoc, mappingAuditDoc;
+    try {
+      doctorAuditDoc = await writeAuditLog({
+        entityType: 'USER_PROFILE',
+        entityId: doctorId.toString(),
+        actorId: doctorId.toString(),
+        actionType: 'CREATE',
+        data: doctorData,
+        metadata: { hospitalId: hospital._id.toString() }
+      });
+
+      mappingAuditDoc = await writeAuditLog({
+        entityType: 'DOCTOR_REGISTRY',
+        entityId: mappingId.toString(),
+        actorId: doctorId.toString(),
+        actionType: 'CREATE',
+        data: mappingData,
+        metadata: { event: 'DOCTOR_REGISTRATION_REQUEST' }
+      });
+    } catch (blockchainErr) {
+      console.error('🔴 Blockchain write failed — doctor registration aborted:', blockchainErr.message);
+      return res.status(503).json({
+        success: false,
+        message: 'Registration failed: could not write to blockchain. Please try again.',
+        details: blockchainErr.code === 'INSUFFICIENT_FUNDS'
+          ? 'Blockchain wallet has insufficient funds.'
+          : blockchainErr.message
+      });
+    }
+
+    // ── MongoDB — only after blockchain confirmed ─────────────────────────────
     // Create doctor user
     const doctor = await User.create({
+      _id: doctorId,
       email,
       password,
       phone,
       firstName,
       lastName,
       role: 'doctor',
+      blockchainHash: doctorAuditDoc.dataHash,
+      blockchainTxHash: doctorAuditDoc.blockchainTxHash,
       doctorProfile: {
         licenseNumber,
         licenseState,
@@ -296,6 +386,7 @@ exports.registerDoctor = async (req, res, next) => {
 
     // Create pending mapping to hospital
     const mapping = await DoctorHospitalMapping.create({
+      _id: mappingId,
       doctor: doctor._id,
       hospital: hospital._id,
       applicationNote,
@@ -303,7 +394,7 @@ exports.registerDoctor = async (req, res, next) => {
       department,
       specialtiesAtHospital: specializations,
       status: 'pending',
-      appliedAt: new Date()
+      appliedAt
     });
 
     // Generate tokens
@@ -315,51 +406,6 @@ exports.registerDoctor = async (req, res, next) => {
 
     // Supabase: send verification email (non-blocking)
     attachSupabaseVerification(doctor, password);
-
-    const actorId = doctor._id.toString();
-    await writeAuditLog({
-      entityType: 'USER_PROFILE',
-      entityId: doctor._id.toString(),
-      actorId,
-      actionType: 'CREATE',
-      data: {
-        id: doctor._id.toString(),
-        role: doctor.role,
-        email: doctor.email,
-        firstName: doctor.firstName,
-        lastName: doctor.lastName,
-        doctorProfile: {
-          licenseNumber,
-          licenseState,
-          licenseExpiry: licenseExpiry ? new Date(licenseExpiry).toISOString() : null,
-          specializations: specializations || [],
-          yearsOfExperience,
-          bio
-        }
-      },
-      metadata: {
-        hospitalId: hospital._id.toString()
-      }
-    });
-
-    await writeAuditLog({
-      entityType: 'DOCTOR_REGISTRY',
-      entityId: mapping._id.toString(),
-      actorId,
-      actionType: 'CREATE',
-      data: {
-        mappingId: mapping._id.toString(),
-        doctorId: doctor._id.toString(),
-        hospitalId: hospital._id.toString(),
-        status: mapping.status,
-        employmentType: mapping.employmentType,
-        department: mapping.department,
-        appliedAt: mapping.appliedAt
-      },
-      metadata: {
-        event: 'DOCTOR_REGISTRATION_REQUEST'
-      }
-    });
 
     const userVerificationStatus = await getVerificationStatusForEntity({
       entityType: 'USER_PROFILE',
@@ -453,14 +499,59 @@ exports.registerPatient = async (req, res, next) => {
       }
     }
 
+    // ── Pre-generate ID ───────────────────────────────────────────────────────
+    const patientId = new mongoose.Types.ObjectId();
+
+    const patientData = {
+      id: patientId.toString(),
+      role: 'patient',
+      email,
+      firstName,
+      lastName,
+      phone,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+      gender,
+      patientProfile: {
+        bloodType,
+        allergies: allergies || [],
+        chronicConditions: chronicConditions || []
+      }
+    };
+
+    // ── Blockchain FIRST ──────────────────────────────────────────────────────
+    let patientAuditDoc;
+    try {
+      patientAuditDoc = await writeAuditLog({
+        entityType: 'USER_PROFILE',
+        entityId: patientId.toString(),
+        actorId: patientId.toString(),
+        actionType: 'CREATE',
+        data: patientData,
+        metadata: { excluded: ['mental_health_chat'] }
+      });
+    } catch (blockchainErr) {
+      console.error('🔴 Blockchain write failed — patient registration aborted:', blockchainErr.message);
+      return res.status(503).json({
+        success: false,
+        message: 'Registration failed: could not write to blockchain. Please try again.',
+        details: blockchainErr.code === 'INSUFFICIENT_FUNDS'
+          ? 'Blockchain wallet has insufficient funds.'
+          : blockchainErr.message
+      });
+    }
+
+    // ── MongoDB — only after blockchain confirmed ─────────────────────────────
     // Create patient user
     const patient = await User.create({
+      _id: patientId,
       email,
       password,
       phone,
       firstName,
       lastName,
       role: 'patient',
+      blockchainHash: patientAuditDoc.dataHash,
+      blockchainTxHash: patientAuditDoc.blockchainTxHash,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
       gender,
       patientProfile: {
@@ -479,31 +570,6 @@ exports.registerPatient = async (req, res, next) => {
 
     // Supabase: send verification email (non-blocking)
     attachSupabaseVerification(patient, password);
-
-    await writeAuditLog({
-      entityType: 'USER_PROFILE',
-      entityId: patient._id.toString(),
-      actorId: patient._id.toString(),
-      actionType: 'CREATE',
-      data: {
-        id: patient._id.toString(),
-        role: patient.role,
-        email: patient.email,
-        firstName: patient.firstName,
-        lastName: patient.lastName,
-        phone: patient.phone,
-        dateOfBirth: patient.dateOfBirth,
-        gender: patient.gender,
-        patientProfile: {
-          bloodType: patient.patientProfile?.bloodType,
-          allergies: patient.patientProfile?.allergies || [],
-          chronicConditions: patient.patientProfile?.chronicConditions || []
-        }
-      },
-      metadata: {
-        excluded: ['mental_health_chat']
-      }
-    });
 
     res.status(201).json({
       success: true,
@@ -984,29 +1050,46 @@ exports.login = async (req, res, next) => {
     // Reset login attempts on success
     await user.resetLoginAttempts();
 
-    // Email verification check (Supabase layer)
-    // Only block if user has a supabaseUserId (i.e. registered after Supabase was integrated)
-    const userWithSupabase = await User.findById(user._id).select('+supabaseUserId');
-    if (userWithSupabase?.supabaseUserId && !user.isEmailVerified) {
+    // ── Email verification gate ──────────────────────────────────────────────
+    // Block login if email is not verified. For users without a supabaseUserId
+    // (registered before Supabase integration), create one now so they get
+    // the verification email and are gated going forward.
+    if (!user.isEmailVerified) {
       try {
-        const { checkEmailVerified } = require('./services/supabaseService');
-        const verified = await checkEmailVerified({ supabaseUserId: userWithSupabase.supabaseUserId });
-        if (verified) {
-          // Sync the flag
-          await User.findByIdAndUpdate(user._id, { isEmailVerified: true });
-        } else {
-          return res.status(403).json({
-            success: false,
-            emailVerificationRequired: true,
-            email: user.email,
-            message: 'Please verify your email before logging in. Check your inbox for the verification link.'
-          });
+        const { checkEmailVerified, createSupabaseUser } = require('../services/supabaseService');
+        const userWithSupabase = await User.findById(user._id).select('+supabaseUserId');
+        let supabaseUserId = userWithSupabase?.supabaseUserId;
+
+        if (!supabaseUserId) {
+          // First login after integration — create Supabase user & send email
+          try {
+            const result = await createSupabaseUser(user.email, password);
+            supabaseUserId = result.supabaseUserId;
+            await User.findByIdAndUpdate(user._id, { supabaseUserId });
+          } catch (createErr) {
+            console.error('[Login] Could not create Supabase user:', createErr.message);
+          }
+        }
+
+        if (supabaseUserId) {
+          const verified = await checkEmailVerified({ supabaseUserId });
+          if (verified) {
+            await User.findByIdAndUpdate(user._id, { isEmailVerified: true });
+          } else {
+            return res.status(403).json({
+              success: false,
+              emailVerificationRequired: true,
+              email: user.email,
+              message: 'Please verify your email before logging in. Check your inbox for the verification link.'
+            });
+          }
         }
       } catch (supabaseErr) {
-        // Supabase down — log and allow login (non-fatal)
-        console.error('[Login] Supabase verification check failed, allowing login:', supabaseErr.message);
+        // Supabase down — log but allow login so system stays up
+        console.error('[Login] Supabase check failed, allowing login:', supabaseErr.message);
       }
     }
+    // ────────────────────────────────────────────────────────────────────────
 
     // For doctors, check hospital approval status
     let hospitalInfo = null;
@@ -1052,6 +1135,8 @@ exports.login = async (req, res, next) => {
           id: user._id,
           email: user.email,
           fullName: user.fullName,
+          firstName: user.firstName,
+          lastName: user.lastName,
           role: user.role,
           hospitalInfo
         },
@@ -1552,7 +1637,7 @@ exports.resendVerification = async (req, res, next) => {
  */
 exports.getVerificationStatus = async (req, res, next) => {
   try {
-    const { checkEmailVerified, confirmUserEmail } = require('../services/supabaseService');
+    const { checkEmailVerified, confirmUserEmail, createSupabaseUser } = require('../services/supabaseService');
 
     const user = await User.findById(req.user.id).select('+supabaseUserId isEmailVerified email');
 
@@ -1561,18 +1646,34 @@ exports.getVerificationStatus = async (req, res, next) => {
     }
 
     let verified = user.isEmailVerified;
+    let supabaseUserId = user.supabaseUserId;
+
+    // If no supabaseUserId yet, create one now and send verification email
+    if (!supabaseUserId && !verified) {
+      try {
+        // Use a random password — Supabase is only used for email verification,
+        // not for login. The user's real password stays in MongoDB.
+        const tempPassword = require('crypto').randomBytes(16).toString('hex');
+        const result = await createSupabaseUser(user.email, tempPassword);
+        supabaseUserId = result.supabaseUserId;
+        await User.findByIdAndUpdate(user._id, { supabaseUserId });
+      } catch (err) {
+        console.error('[getVerificationStatus] Could not create Supabase user:', err.message);
+      }
+    }
 
     // Re-check Supabase if not yet marked verified
-    if (!verified && user.supabaseUserId) {
+    if (!verified && supabaseUserId) {
       try {
-        verified = await checkEmailVerified({ supabaseUserId: user.supabaseUserId });
+        verified = await checkEmailVerified({ supabaseUserId });
         if (verified) {
-          // Force-confirm in Supabase and sync MongoDB flag
-          try { await confirmUserEmail(user.supabaseUserId); } catch (_) {}
+          try { await confirmUserEmail(supabaseUserId); } catch (_) {}
           await User.findByIdAndUpdate(user._id, { isEmailVerified: true });
         }
       } catch (err) {
         console.error('[getVerificationStatus] Supabase check failed:', err.message);
+        // Supabase down — don't block the user
+        verified = true;
       }
     }
 
@@ -1581,7 +1682,7 @@ exports.getVerificationStatus = async (req, res, next) => {
       data: {
         email: user.email,
         isEmailVerified: verified,
-        supabaseLinked: !!user.supabaseUserId
+        supabaseLinked: !!supabaseUserId
       }
     });
   } catch (error) {

@@ -7,6 +7,10 @@ export const metadata: Metadata = {
   title: 'MedChain - Healthcare System',
   description: 'Production-grade healthcare management system',
   keywords: 'healthcare, medical records, appointments, MedChain',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({

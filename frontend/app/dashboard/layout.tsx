@@ -5,20 +5,26 @@ import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import { authService } from '@/services/authService';
 
-/**
- * Dashboard root layout — guards ALL /dashboard/* routes.
- * 1. Redirects to /auth/login if no token.
- * 2. Redirects to /auth/login if email is not verified (Supabase check).
- */
 export default function DashboardRootLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const guard = async () => {
-      // No token → go to login
       const token = authService.getAccessToken();
       if (!token || authService.isTokenExpired()) {
+        router.replace('/auth/login');
+        return;
+      }
+
+      // Fetch fresh user from backend — ensures firstName/lastName are in localStorage
+      try {
+        await authService.getCurrentUser();
+        // Notify AuthContext to re-read from localStorage
+        window.dispatchEvent(new Event('storage'));
+      } catch {
+        // token invalid — clear and redirect
+        authService.clearTokens();
         router.replace('/auth/login');
         return;
       }
@@ -26,17 +32,14 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
       // Check email verification
       try {
         const res = await authService.getVerificationStatus();
-        const { isEmailVerified, supabaseLinked } = res.data?.data ?? {};
-
-        // Only block if this user is linked to Supabase (registered after integration)
-        if (supabaseLinked && !isEmailVerified) {
-          // Clear tokens so they can't bypass by refreshing
+        const { isEmailVerified } = res.data?.data ?? {};
+        if (!isEmailVerified) {
           authService.clearTokens();
           router.replace('/auth/login?reason=unverified');
           return;
         }
       } catch {
-        // If the check fails (network/Supabase down), allow through
+        // Supabase down — allow through
       }
 
       setReady(true);
@@ -53,7 +56,7 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
-          <span className="text-sm">Checking access...</span>
+          <span className="text-sm">Loading...</span>
         </div>
       </div>
     );

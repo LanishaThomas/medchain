@@ -4,6 +4,7 @@ const MedicalRecord = require('../models/MedicalRecord');
 const Prescription = require('../models/Prescription');
 const Permission = require('../models/Permission');
 const Appointment = require('../models/Appointment');
+const Consultation = require('../models/Consultation');
 const User = require('../models/User');
 const {
   buildDeterministicHash,
@@ -12,13 +13,14 @@ const {
 } = require('../services/blockchainAuditService');
 
 const ENTITY_MODEL_MAP = {
-  profile: User,
+  profile:      User,
   medicalrecord: MedicalRecord,
   prescription: Prescription,
-  permission: Permission,
-  appointment: Appointment,
-  userprofile: User,
-  user: User
+  permission:   Permission,
+  appointment:  Appointment,
+  consultation: Consultation,
+  userprofile:  User,
+  user:         User
 };
 
 function normalizeEntityType(entityType) {
@@ -63,6 +65,20 @@ async function getChainHashSetByEntityIds(entityIds) {
 
 function serializeEntityForHash(entityType, doc) {
   const normalized = normalizeEntityType(entityType);
+
+  if (normalized === 'consultation') {
+    return {
+      consultationId: doc._id?.toString(),
+      appointmentId:  doc.appointmentId?.toString(),
+      doctorId:       doc.doctorId?.toString(),
+      patientId:      doc.patientId?.toString(),
+      startTime:      doc.startTime ? new Date(doc.startTime).toISOString() : null,
+      endTime:        doc.endTime   ? new Date(doc.endTime).toISOString()   : null,
+      status:         doc.status,
+      prescriptionId: doc.prescriptionId?.toString() || null,
+      paymentId:      doc.paymentId?.toString()      || null
+    };
+  }
 
   if (normalized === 'userprofile' || normalized === 'user') {
     return {
@@ -316,6 +332,136 @@ exports.verifyHistory = async (req, res, next) => {
         dbLogs: dbLogsWithVerification,
         versions,
         versionComparisons
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * GET /api/blockchain/verify/consultation/:consultationId
+ *
+ * Dedicated consultation audit verifier.
+ * Rebuilds the canonical audit payload from live DB data and compares
+ * its hash against every entry stored on-chain for this consultation.
+ *
+ * Returns:
+ *   VALID     — current DB state matches a chain entry
+ *   TAMPERED  — DB state does not match any chain entry
+ *   NOT_ANCHORED — no chain entry exists yet
+ */
+exports.verifyConsultation = async (req, res, next) => {
+  try {
+    const { consultationId } = req.params;
+
+    const consultation = await Consultation.findById(consultationId).lean();
+    if (!consultation) {
+      return res.status(404).json({ success: false, message: 'Consultation not found' });
+    }
+
+    if (consultation.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Consultation is not yet completed — no audit record exists'
+      });
+    }
+
+    const Payment      = require('../models/Payment');
+    const Prescription = require('../models/Prescription');
+    const Appointment  = require('../models/Appointment');
+
+    const appointment = await Appointment.findById(consultation.appointmentId).lean();
+    if (!appointment || appointment.consultationType !== 'online') {
+      return res.status(400).json({
+        success: false,
+        message: 'Consultation is not an online consultation — not audited on-chain'
+      });
+    }
+
+    // Rebuild the canonical payload exactly as auditConsultationCompletion does
+    const payment = await Payment.findOne({
+      appointmentId: appointment._id,
+      status: 'paid'
+    }).lean();
+
+    const prescription = await Prescription.findOne({
+      patientId: consultation.patientId,
+      doctorId:  consultation.doctorId,
+      status:    { $in: ['active', 'completed'] }
+    }).sort({ createdAt: -1 }).lean();
+
+    const startMs = consultation.startTime ? new Date(consultation.startTime).getTime() : null;
+    const endMs   = consultation.endTime   ? new Date(consultation.endTime).getTime()   : null;
+    const durationSeconds = startMs && endMs ? Math.round((endMs - startMs) / 1000) : null;
+
+    const payload = {
+      consultationId: consultation._id.toString(),
+      appointmentId:  appointment._id.toString(),
+      doctorId:       consultation.doctorId.toString(),
+      patientId:      consultation.patientId.toString(),
+      startTime:      consultation.startTime ? new Date(consultation.startTime).toISOString() : null,
+      endTime:        consultation.endTime   ? new Date(consultation.endTime).toISOString()   : null,
+      durationSeconds,
+      paymentId:          payment?._id.toString()            || null,
+      amount:             payment?.amount                    ?? null,
+      currency:           payment?.currency                  || null,
+      paymentStatus:      payment?.status                    || null,
+      razorpayOrderId:    payment?.razorpayOrderId           || null,
+      razorpayPaymentId:  payment?.razorpayPaymentId         || null,
+      prescriptionId:     prescription?._id.toString()       || null,
+      medicines:          prescription ? prescription.medicines.map(m => ({
+        name: m.name, dosage: m.dosage, notes: m.notes || ''
+      })) : [],
+      prescriptionNotes:  prescription?.notes || null,
+      consultationType:   'online',
+      timestamp:          consultation.blockchainTimestamp
+        ? new Date(consultation.blockchainTimestamp).toISOString()
+        : null
+    };
+
+    const currentHash = buildDeterministicHash(payload);
+    const currentHashNorm = normalizeHash(currentHash);
+    const anchoredHash = normalizeHash(consultation.blockchainHash);
+
+    // Fetch all chain entries for this consultation
+    let chainHashSet = new Set();
+    let chainLogs = [];
+    try {
+      chainLogs = await getLogsByEntityFromChain(consultationId);
+      chainHashSet = new Set(chainLogs.map(l => normalizeHash(l.dataHash)).filter(Boolean));
+    } catch (chainErr) {
+      if (!isNoChainLogError(chainErr)) return next(chainErr);
+    }
+
+    const isAnchored = chainHashSet.size > 0;
+    const isValid    = chainHashSet.has(currentHashNorm);
+
+    // Audit log history from MongoDB
+    const dbLogs = await BlockchainAuditLog.find({ entityId: consultationId })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        consultationId,
+        status: isValid ? 'VALID' : isAnchored ? 'TAMPERED' : 'NOT_ANCHORED',
+        verificationStatus: isValid ? 'VERIFIED' : 'TAMPERED',
+        isValid,
+        currentHash,
+        anchoredHash: consultation.blockchainHash || null,
+        latestTxHash: consultation.blockchainTxHash || null,
+        blockchainTimestamp: consultation.blockchainTimestamp || null,
+        chainEntries: chainLogs.length,
+        auditHistory: dbLogs.map(l => ({
+          actionType: l.actionType,
+          dataHash: l.dataHash,
+          txHash: l.blockchainTxHash,
+          blockNumber: l.blockNumber,
+          timestamp: l.timestamp,
+          verified: chainHashSet.has(normalizeHash(l.dataHash))
+        }))
       }
     });
   } catch (error) {

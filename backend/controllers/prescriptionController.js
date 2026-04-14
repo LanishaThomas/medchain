@@ -10,6 +10,7 @@ const {
 } = require('../services/blockchainConsistencyService');
 const { attachVerificationStatus, getVerificationStatusForEntity } = require('../services/entityVerificationService');
 const { notify } = require('../services/notificationService');
+const { reAuditConsultation } = require('../services/consultationAuditService');
 
 const createPrescription = async (req, res) => {
   try {
@@ -184,6 +185,18 @@ const createPrescription = async (req, res) => {
       priority: 'high',
       data: { prescriptionId: populatedPrescription._id, prescriptionNumber: populatedPrescription.prescriptionNumber }
     }).catch(() => {});
+
+    // Re-audit any completed online consultation for this doctor+patient pair
+    // Fire-and-forget — runs after response is sent
+    const Consultation = require('../models/Consultation');
+    Consultation.findOne({
+      doctorId:  populatedPrescription.doctorId?._id,
+      patientId: populatedPrescription.patientId?._id,
+      status: 'completed'
+    })
+      .sort({ endTime: -1 })
+      .then(c => { if (c) reAuditConsultation(c._id.toString()); })
+      .catch(err => console.error('[ConsultationAudit] Re-audit after prescription failed:', err.message));
 
     return res.status(201).json({
       success: true,

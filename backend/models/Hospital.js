@@ -131,7 +131,11 @@ const hospitalSchema = new mongoose.Schema({
   // Status
   isActive: { type: Boolean, default: true },
   deactivatedAt: Date,
-  deactivationReason: String
+  deactivationReason: String,
+
+  // Blockchain audit reference
+  blockchainHash: { type: String, default: null },
+  blockchainTxHash: { type: String, default: null }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
