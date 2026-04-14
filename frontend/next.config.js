@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false, // Disabled to prevent duplicate API calls
+  reactStrictMode: false,
 };
 
 module.exports = nextConfig;
