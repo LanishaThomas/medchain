@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { authService } from '@/services/authService';
@@ -8,7 +8,7 @@ import { authService } from '@/services/authService';
 type UserType = 'patient' | 'doctor' | 'hospital' | null;
 type Mode = 'login' | 'register';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [userType, setUserType] = useState<UserType>(null);
   const [mode, setMode] = useState<Mode>('login');
   
@@ -817,5 +817,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100" />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
