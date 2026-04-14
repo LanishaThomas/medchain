@@ -199,7 +199,7 @@ export default function ConsultationRoomPage() {
     localAgoraUidRef.current = agoraUid;
 
     try {
-      await client.join(joinData.appId, joinData.roomId, joinData.token, agoraUid);
+      await client.join(joinData.appId!, joinData.roomId!, joinData.token!, agoraUid);
     } catch (joinErr: any) {
       sessionActiveRef.current = false;
       const msg = joinErr?.message || String(joinErr);
