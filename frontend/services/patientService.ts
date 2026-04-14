@@ -1,4 +1,4 @@
-import api from '../app/api';
+import { api } from './authService';
 
 export interface MedicalRecord {
   _id: string;

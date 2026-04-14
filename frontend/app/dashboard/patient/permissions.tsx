@@ -60,7 +60,8 @@ export default function PatientPermissionsComponent() {
   const fetchPendingRequests = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/permissions/pending', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/permissions/pending`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
       });
 
@@ -77,7 +78,8 @@ export default function PatientPermissionsComponent() {
 
   const fetchPermissions = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/permissions', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/permissions`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
       });
 
@@ -93,8 +95,9 @@ export default function PatientPermissionsComponent() {
   const approveRequest = async (permissionId: string) => {
     try {
       setProcessingId(permissionId);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       const response = await fetch(
-        `http://localhost:5000/api/permissions/${permissionId}/approve`,
+        `${API_URL}/permissions/${permissionId}/approve`,
         {
           method: 'POST',
           headers: {
@@ -124,8 +127,9 @@ export default function PatientPermissionsComponent() {
     const reason = prompt('Why are you rejecting this request? (optional)');
     try {
       setProcessingId(permissionId);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       const response = await fetch(
-        `http://localhost:5000/api/permissions/${permissionId}/reject`,
+        `${API_URL}/permissions/${permissionId}/reject`,
         {
           method: 'POST',
           headers: {
@@ -156,8 +160,9 @@ export default function PatientPermissionsComponent() {
 
     try {
       setProcessingId(permissionId);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       const response = await fetch(
-        `http://localhost:5000/api/permissions/${permissionId}/revoke`,
+        `${API_URL}/permissions/${permissionId}/revoke`,
         {
           method: 'POST',
           headers: {
@@ -378,13 +383,13 @@ export default function PatientPermissionsComponent() {
       {/* History Tab */}
       {activeTab === 'history' && (
         <div className="space-y-4">
-          {permissions.filter(p => !p.isActive && p.status !== 'pending').length === 0 ? (
+          {permissions.filter(p => !p.isActive && (p.status as string) !== 'pending').length === 0 ? (
             <div className="text-center p-8 bg-gray-50 rounded-lg">
               <p className="text-gray-600">No history</p>
             </div>
           ) : (
             permissions
-              .filter(p => !p.isActive && p.status !== 'pending')
+              .filter(p => !p.isActive && (p.status as string) !== 'pending')
               .map(perm => (
                 <div
                   key={perm.id}

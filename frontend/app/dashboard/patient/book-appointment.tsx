@@ -1151,7 +1151,7 @@ export default function BookAppointmentComponent() {
                               disabled={processingId === apt.id}
                               className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-semibold disabled:opacity-50"
                             >
-                              {processingId === apt.id ? '⏳' : '💳'} {apt.amount > 0 ? `Pay ₹${apt.amount}` : 'Pay Now'}
+                              {processingId === apt.id ? '⏳' : '💳'} {(apt.amount ?? 0) > 0 ? `Pay ₹${apt.amount}` : 'Pay Now'}
                             </button>
                           )}
                           {/* Meet — telemedicine that is approved AND either paid or no payment required */}

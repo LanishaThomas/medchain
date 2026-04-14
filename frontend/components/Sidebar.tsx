@@ -94,6 +94,18 @@ const roleConfig: Record<UserRole, RoleConfig> = {
       { name: 'Profile',        href: '/dashboard/patient?section=profile',       icon: <UserIcon /> },
     ],
   },
+  caregiver: {
+    gradient:   'from-teal-500 to-teal-600',
+    accentBg:   'bg-teal-50',
+    accentText: 'text-teal-700',
+    accentIcon: 'text-teal-600',
+    label:      'Caregiver',
+    badgeBg:    'bg-teal-100 text-teal-700',
+    navItems: [
+      { name: 'Dashboard', href: '/dashboard/patient', icon: <HomeIcon /> },
+      { name: 'Profile',   href: '/dashboard/patient?section=profile', icon: <UserIcon /> },
+    ],
+  },
 };
 
 /* ─── Props ─────────────────────────────────────────── */

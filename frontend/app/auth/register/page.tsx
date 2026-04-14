@@ -36,7 +36,7 @@ export default function RegisterPage() {
       
       // Also test debug endpoint
       try {
-        const debugResponse = await fetch('http://localhost:5000/api/auth/hospitals/debug')
+        const debugResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/auth/hospitals/debug`)
           .then(r => r.json());
         console.log('📊 Debug endpoint response:', debugResponse);
       } catch (debugErr) {

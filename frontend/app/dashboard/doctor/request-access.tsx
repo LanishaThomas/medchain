@@ -26,8 +26,9 @@ export default function RequestAccessComponent() {
 
     try {
       setLoading(true);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       const response = await fetch(
-        `http://localhost:5000/api/permissions/search-patients?query=${encodeURIComponent(query)}`,
+        `${API_URL}/permissions/search-patients?query=${encodeURIComponent(query)}`,
         {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
         }
@@ -57,9 +58,10 @@ export default function RequestAccessComponent() {
     try {
       setSubmitting(true);
       const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + parseInt(duration));
+      expiryDate.setDate(expiryDate.getDate() + duration);
 
-      const response = await fetch('http://localhost:5000/api/permissions/request-access', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/permissions/request-access`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
