@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://medchain-x96u.onrender.com/api';
 
 interface Tokens {
   accessToken: string;

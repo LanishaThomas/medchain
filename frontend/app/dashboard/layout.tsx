@@ -33,13 +33,15 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
       try {
         const res = await authService.getVerificationStatus();
         const { isEmailVerified } = res.data?.data ?? {};
-        if (!isEmailVerified) {
+        if (isEmailVerified === false) {
+          // Only block if we got a definitive false — not on error/timeout
           authService.clearTokens();
           router.replace('/auth/login?reason=unverified');
           return;
         }
       } catch {
-        // Supabase down — allow through
+        // Verification check failed (network/Supabase down) — allow through
+        console.warn('[DashboardGuard] Verification check failed, allowing through');
       }
 
       setReady(true);

@@ -60,7 +60,7 @@ export default function PatientPermissionsComponent() {
   const fetchPendingRequests = async () => {
     try {
       setLoading(true);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       const response = await fetch(`${API_URL}/permissions/pending`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
       });
@@ -78,7 +78,7 @@ export default function PatientPermissionsComponent() {
 
   const fetchPermissions = async () => {
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       const response = await fetch(`${API_URL}/permissions`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
       });
@@ -95,7 +95,7 @@ export default function PatientPermissionsComponent() {
   const approveRequest = async (permissionId: string) => {
     try {
       setProcessingId(permissionId);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       const response = await fetch(
         `${API_URL}/permissions/${permissionId}/approve`,
         {
@@ -127,7 +127,7 @@ export default function PatientPermissionsComponent() {
     const reason = prompt('Why are you rejecting this request? (optional)');
     try {
       setProcessingId(permissionId);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       const response = await fetch(
         `${API_URL}/permissions/${permissionId}/reject`,
         {
@@ -160,7 +160,7 @@ export default function PatientPermissionsComponent() {
 
     try {
       setProcessingId(permissionId);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       const response = await fetch(
         `${API_URL}/permissions/${permissionId}/revoke`,
         {

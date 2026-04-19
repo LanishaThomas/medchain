@@ -26,7 +26,7 @@ export default function RequestAccessComponent() {
 
     try {
       setLoading(true);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       const response = await fetch(
         `${API_URL}/permissions/search-patients?query=${encodeURIComponent(query)}`,
         {
@@ -60,7 +60,7 @@ export default function RequestAccessComponent() {
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + duration);
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       const response = await fetch(`${API_URL}/permissions/request-access`, {
         method: 'POST',
         headers: {

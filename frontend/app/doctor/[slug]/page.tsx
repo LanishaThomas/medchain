@@ -47,7 +47,7 @@ export default function PublicDoctorProfile() {
     const fetchDoctorProfile = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/profile/doctor/public/${slug}`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://medchain-x96u.onrender.com/api'}/profile/doctor/public/${slug}`);
         
         if (!response.ok) {
           if (response.status === 404) {
