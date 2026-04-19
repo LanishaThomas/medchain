@@ -26,11 +26,15 @@ export default function ExtensionErrorSuppressor() {
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       const msg = String(event.reason?.message ?? event.reason ?? '');
+      const stack = String(event.reason?.stack ?? '');
       if (
         msg.includes('MetaMask') ||
         msg.includes('Failed to connect to MetaMask') ||
         msg.includes('ethereum') ||
-        msg.includes('web3')
+        msg.includes('web3') ||
+        stack.includes('inpage.js') ||
+        stack.includes('chrome-extension://') ||
+        stack.includes('moz-extension://')
       ) {
         event.preventDefault();
       }
