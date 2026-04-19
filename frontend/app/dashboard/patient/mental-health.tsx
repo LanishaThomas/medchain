@@ -77,8 +77,8 @@ const breathingPatterns: BreathingPattern[] = [
   }
 ];
 
-// Audio served from local backend (backend/uploads/audio/)
-const AUDIO_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace('/api', '');
+// Audio served from frontend public folder (static, works on Vercel)
+const AUDIO_BASE_URL = '';
 
 const musicTracks: MusicTrack[] = [
   { id: 'rain',       title: 'Peaceful Rain',    category: 'stress-relief', description: 'Gentle rain sounds for relaxation',    icon: '🌧️', audioUrl: `${AUDIO_BASE_URL}/audio/rain.mp3` },
