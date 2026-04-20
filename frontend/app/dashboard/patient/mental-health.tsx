@@ -302,13 +302,16 @@ export default function MentalHealthComponent() {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      audioRef.current.src = '';  // release the audio resource
+      audioRef.current.load();
       audioRef.current = null;
     }
     setIsPlaying(false);
     setCurrentTrack(track);
 
     try {
-      const audio = new Audio(track.audioUrl);
+      const audio = new Audio();
+      audio.src = track.audioUrl;  // set src after creation to avoid caching issues
       audio.loop = true;
       audio.volume = 0.7;
       audioRef.current = audio;
@@ -331,6 +334,8 @@ export default function MentalHealthComponent() {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      audioRef.current.src = '';
+      audioRef.current.load();
       audioRef.current = null;
     }
     setIsPlaying(false);

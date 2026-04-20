@@ -9,11 +9,11 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Models to try in order (flash models first — lower quota cost)
 const GEMINI_MODELS = [
-  'gemini-2.5-flash',
   'gemini-2.0-flash',
-  'gemini-3-flash',
-  'gemini-2.5-pro',
-  'gemini-3-pro'
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',
+  'gemini-1.5-pro',
 ];
 
 // Helper: sleep for ms
