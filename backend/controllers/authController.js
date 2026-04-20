@@ -1651,14 +1651,17 @@ exports.getVerificationStatus = async (req, res, next) => {
     // If no supabaseUserId yet, create one now and send verification email
     if (!supabaseUserId && !verified) {
       try {
-        // Use a random password — Supabase is only used for email verification,
-        // not for login. The user's real password stays in MongoDB.
         const tempPassword = require('crypto').randomBytes(16).toString('hex');
         const result = await createSupabaseUser(user.email, tempPassword);
         supabaseUserId = result.supabaseUserId;
         await User.findByIdAndUpdate(user._id, { supabaseUserId });
       } catch (err) {
         console.error('[getVerificationStatus] Could not create Supabase user:', err.message);
+        // Supabase unavailable — treat as verified so user isn't blocked
+        return res.status(200).json({
+          success: true,
+          data: { email: user.email, isEmailVerified: true, supabaseLinked: false }
+        });
       }
     }
 

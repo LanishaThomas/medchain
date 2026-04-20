@@ -35,7 +35,7 @@ export function useNotifications() {
     const token = authService.getAccessToken();
     if (!token) return;
 
-    const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const API = process.env.NEXT_PUBLIC_API_URL || 'https://medchain-x96u.onrender.com/api';
     const url = `${API}/notifications/stream?token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
     esRef.current = es;
