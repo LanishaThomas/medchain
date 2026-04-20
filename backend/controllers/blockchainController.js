@@ -81,14 +81,13 @@ function serializeEntityForHash(entityType, doc) {
   }
 
   if (normalized === 'userprofile' || normalized === 'user') {
-    // Must match exactly what writeAuditLog received at registration time.
-    // Patient registration payload uses 'id' (not '_id') and limited patientProfile fields.
+    // Must match exactly what profileController writes via hashSource
     const base = {
       id: doc._id?.toString(),
       role: doc.role,
-      email: doc.email,
       firstName: doc.firstName,
       lastName: doc.lastName,
+      email: doc.email,
       phone: doc.phone,
       dateOfBirth: doc.dateOfBirth,
       gender: doc.gender,
@@ -100,7 +99,13 @@ function serializeEntityForHash(entityType, doc) {
         patientProfile: {
           bloodType: doc.patientProfile?.bloodType,
           allergies: doc.patientProfile?.allergies || [],
-          chronicConditions: doc.patientProfile?.chronicConditions || []
+          currentMedications: doc.patientProfile?.currentMedications || [],
+          previousSurgeries: doc.patientProfile?.previousSurgeries || [],
+          chronicConditions: doc.patientProfile?.chronicConditions || [],
+          address: doc.patientProfile?.address || {},
+          emergencyContacts: doc.patientProfile?.emergencyContacts || [],
+          insuranceProvider: doc.patientProfile?.insuranceProvider || '',
+          insurancePolicyNumber: doc.patientProfile?.insurancePolicyNumber || ''
         }
       };
     }
