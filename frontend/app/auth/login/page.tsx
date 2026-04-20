@@ -754,9 +754,33 @@ function LoginPageContent() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
-                <input type="text" value={address.city} onChange={e => setAddress({...address, city: e.target.value})} required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address *</label>
+                <input type="text" value={address.street} onChange={e => setAddress({...address, street: e.target.value})} required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" placeholder="123 Main St" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                  <input type="text" value={address.city} onChange={e => setAddress({...address, city: e.target.value})} required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+                  <input type="text" value={address.state} onChange={e => setAddress({...address, state: e.target.value})} required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" placeholder="e.g. Maharashtra" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ZIP / PIN Code *</label>
+                  <input type="text" value={address.zipCode} onChange={e => setAddress({...address, zipCode: e.target.value})} required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" placeholder="400001" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hospital Phone *</label>
+                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" placeholder="+91..." />
+                </div>
               </div>
               
               <div className="border-b pb-3 mb-3 mt-4">

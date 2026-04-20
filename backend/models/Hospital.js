@@ -32,7 +32,6 @@ const hospitalSchema = new mongoose.Schema({
   },
   licenseNumber: { 
     type: String, 
-    required: [true, 'License number is required'],
     trim: true
   },
   licenseExpiry: Date,
@@ -45,20 +44,17 @@ const hospitalSchema = new mongoose.Schema({
     lowercase: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Invalid email']
   },
-  phone: { 
-    type: String, 
-    required: [true, 'Phone is required']
-  },
+  phone: { type: String },
   emergencyPhone: String,
   website: String,
   
   // Address
   address: {
-    street: { type: String, required: true },
+    street: { type: String },
     city: { type: String, required: true },
-    state: { type: String, required: true },
-    zipCode: { type: String, required: true },
-    country: { type: String, default: 'USA' },
+    state: { type: String },
+    zipCode: { type: String },
+    country: { type: String, default: 'India' },
     coordinates: {
       lat: Number,
       lng: Number
