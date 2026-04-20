@@ -300,6 +300,35 @@ export default function EmergencyQRPage() {
                   ⬇ Download QR Code
                 </a>
 
+                {/* Token for manual entry — hospital pastes this in their Emergency Access portal */}
+                {qrData && (
+                  <div className="w-full bg-amber-50 border border-amber-300 rounded-lg p-3 text-left">
+                    <p className="text-xs font-semibold text-amber-800 mb-1">
+                      📋 Manual Entry Token
+                    </p>
+                    <p className="text-xs text-amber-700 mb-2">
+                      If the QR cannot be scanned, copy this token and paste it in the hospital&apos;s
+                      <strong> Emergency Access Portal → Enter QR Code</strong> field.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <textarea
+                        readOnly
+                        value={qrData}
+                        rows={3}
+                        className="flex-1 text-xs px-2 py-1.5 bg-white border border-amber-200 rounded text-gray-600 font-mono resize-none"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(qrData);
+                        }}
+                        className="px-3 py-2 bg-amber-600 text-white text-xs rounded hover:bg-amber-700 whitespace-nowrap self-start"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3 justify-center">
                   <button
                     onClick={invalidateCurrentQR}
