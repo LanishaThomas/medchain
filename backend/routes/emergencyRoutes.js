@@ -33,8 +33,4 @@ router.post('/invalidate-qr', protect, authorize('patient'), emergencyController
 // Hospital routes (scan QR and access data)
 router.post('/access', protect, authorize('hospital_admin'), emergencyController.accessEmergencyData);
 
-// Public emergency link — no auth required, token in query string
-// Used when QR cannot be scanned (e.g. share link via SMS/WhatsApp)
-router.get('/view', emergencyController.viewEmergencyDataByLink);
-
 module.exports = router;
