@@ -171,18 +171,24 @@ export default function DoctorProfilePage() {
       setError('');
       setSuccess('');
       
-      console.log('📤 Saving doctor profile:', formData);
       const response = await api.put('/profile/doctor', formData);
-      console.log('✅ Profile saved:', response.data);
       
       if (response.data.success) {
         setProfile(response.data.data.profile);
         setSuccess('Profile saved successfully!');
         setEditMode(false);
         setTimeout(() => setSuccess(''), 3000);
+
+        // Auto-regenerate the shareable link/QR whenever profile is saved
+        try {
+          const slugRes = await api.post('/profile/doctor/generate-slug');
+          if (slugRes.data.success) {
+            setShareUrl(slugRes.data.data.shareUrl);
+            generateQrForUrl(slugRes.data.data.shareUrl);
+          }
+        } catch { /* non-fatal */ }
       }
     } catch (err: any) {
-      console.error('❌ Save error:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Failed to save profile');
     } finally {
       setSaving(false);
@@ -823,38 +829,58 @@ export default function DoctorProfilePage() {
               
               {shareUrl ? (
                 <div className="space-y-4">
+                  {/* Link row */}
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
                       value={shareUrl}
                       readOnly
-                      className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg"
+                      className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm"
                     />
                     <button
-                      onClick={() => navigator.clipboard.writeText(shareUrl)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      onClick={() => { navigator.clipboard.writeText(shareUrl); setSuccess('Link copied!'); setTimeout(() => setSuccess(''), 2000); }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm whitespace-nowrap"
                     >
-                      Copy
+                      Copy Link
                     </button>
                   </div>
-                  
+
+                  {/* QR code */}
                   {shareQrImage && (
-                    <div className="flex justify-center">
+                    <div className="flex flex-col items-center gap-3">
                       <div className="p-4 bg-white rounded-lg shadow">
                         <img src={shareQrImage} alt="Profile QR Code" className="w-48 h-48" />
                         <p className="text-center text-sm text-gray-500 mt-2">Scan to view profile</p>
                       </div>
+                      <a
+                        href={shareQrImage}
+                        download="medchain-doctor-profile-qr.png"
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                      >
+                        ⬇ Download QR Code
+                      </a>
                     </div>
                   )}
+
+                  {/* Regenerate button — always visible */}
+                  <div className="pt-2 border-t border-gray-200 text-center">
+                    <p className="text-xs text-gray-500 mb-2">Profile updated? Regenerate to refresh the link.</p>
+                    <button
+                      onClick={generateShareableLink}
+                      className="px-5 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm"
+                    >
+                      🔄 Regenerate Link & QR
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center">
-                  <p className="text-gray-600 mb-4">Generate a shareable link for your profile</p>
+                  <p className="text-gray-600 mb-4">Generate a shareable link and QR code for your profile</p>
                   <button
                     onClick={generateShareableLink}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
-                    Generate Shareable Link
+                    Generate Shareable Link & QR
                   </button>
                 </div>
               )}

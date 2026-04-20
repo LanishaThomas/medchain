@@ -515,6 +515,25 @@ exports.getDoctorProfileBySlug = async (req, res) => {
       entityId: doctor._id,
       dbHash: doctor.blockchainHash
     });
+
+    // Fetch approved hospital affiliations
+    const DoctorHospitalMapping = require('../models/DoctorHospitalMapping');
+    const mappings = await DoctorHospitalMapping.find({
+      doctor: doctor._id,
+      status: 'approved',
+      isActive: true
+    }).populate('hospital', 'name type address logo');
+
+    const hospitals = mappings.map(m => ({
+      id: m.hospital._id,
+      name: m.hospital.name,
+      type: m.hospital.type,
+      address: m.hospital.address,
+      logo: m.hospital.logo,
+      department: m.department,
+      employmentType: m.employmentType,
+      joinedAt: m.approvedAt
+    }));
     
     const settings = doctor.doctorProfile?.profileSettings || {};
     
@@ -525,6 +544,7 @@ exports.getDoctorProfileBySlug = async (req, res) => {
       fullName: doctor.fullName,
       profileImage: doctor.profileImage,
       gender: doctor.gender,
+      dateOfBirth: doctor.dateOfBirth,
       doctorProfile: {
         specializations: doctor.doctorProfile?.specializations || [],
         qualifications: doctor.doctorProfile?.qualifications || [],
@@ -533,13 +553,18 @@ exports.getDoctorProfileBySlug = async (req, res) => {
         certificates: doctor.doctorProfile?.certificates || [],
         achievements: doctor.doctorProfile?.achievements || [],
         consultationFee: doctor.doctorProfile?.consultationFee,
-        languages: doctor.doctorProfile?.languages || [],
+        onlineConsultationFee: doctor.doctorProfile?.onlineConsultationFee || 0,
         offersOnlineConsultation: doctor.doctorProfile?.offersOnlineConsultation || false,
-        onlineConsultationFee: doctor.doctorProfile?.onlineConsultationFee || 0
-      }
+        languages: doctor.doctorProfile?.languages || [],
+        licenseNumber: doctor.doctorProfile?.licenseNumber,
+        licenseState: doctor.doctorProfile?.licenseState,
+        licenseExpiry: doctor.doctorProfile?.licenseExpiry,
+      },
+      hospitals,
+      verificationStatus
     };
-    profileData.verificationStatus = verificationStatus;
     
+    // Respect privacy settings for contact info
     if (settings.showEmail) profileData.email = doctor.email;
     if (settings.showPhone) profileData.phone = doctor.phone;
     

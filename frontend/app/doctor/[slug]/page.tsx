@@ -12,11 +12,16 @@ interface DoctorProfile {
   phone?: string;
   profileImage?: string;
   gender?: string;
+  dateOfBirth?: string;
+  verificationStatus?: string;
   doctorProfile: {
     specializations: string[];
-    qualifications: string[];
+    qualifications: Array<{ degree: string; institution: string; year: number }> | string[];
     yearsOfExperience?: number;
     bio?: string;
+    licenseNumber?: string;
+    licenseState?: string;
+    licenseExpiry?: string;
     certificates: Array<{
       title: string;
       issuingOrganization: string;
@@ -31,8 +36,18 @@ interface DoctorProfile {
       category: string;
     }>;
     consultationFee?: number;
+    onlineConsultationFee?: number;
+    offersOnlineConsultation?: boolean;
     languages?: string[];
   };
+  hospitals?: Array<{
+    id: string;
+    name: string;
+    type?: string;
+    address?: { city?: string; state?: string };
+    department?: string;
+    employmentType?: string;
+  }>;
 }
 
 export default function PublicDoctorProfile() {
@@ -144,14 +159,6 @@ export default function PublicDoctorProfile() {
           </div>
         )}
 
-        {/* Consultation Fee */}
-        {doctor.doctorProfile.consultationFee && (
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Consultation Fee</h2>
-            <p style={styles.fee}>₹{doctor.doctorProfile.consultationFee}</p>
-          </div>
-        )}
-
         {/* Bio */}
         {doctor.doctorProfile.bio && (
           <div style={styles.section}>
@@ -226,6 +233,86 @@ export default function PublicDoctorProfile() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Consultation Info */}
+        {(doctor.doctorProfile.consultationFee || doctor.doctorProfile.offersOnlineConsultation) && (
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Consultation</h2>
+            <div style={styles.contactGrid}>
+              {doctor.doctorProfile.consultationFee && (
+                <div style={styles.contactItem}>
+                  <span style={styles.contactLabel}>🏥 In-person fee:</span>
+                  <span style={{ ...styles.contactValue, color: '#059669', fontWeight: 600 }}>₹{doctor.doctorProfile.consultationFee}</span>
+                </div>
+              )}
+              {doctor.doctorProfile.offersOnlineConsultation && (
+                <div style={styles.contactItem}>
+                  <span style={styles.contactLabel}>💻 Online consultation:</span>
+                  <span style={{ ...styles.contactValue, color: '#059669', fontWeight: 600 }}>
+                    {doctor.doctorProfile.onlineConsultationFee ? `₹${doctor.doctorProfile.onlineConsultationFee}` : 'Available'}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* License Info */}
+        {(doctor.doctorProfile.licenseNumber || doctor.doctorProfile.licenseState) && (
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Medical License</h2>
+            <div style={styles.contactGrid}>
+              {doctor.doctorProfile.licenseNumber && (
+                <div style={styles.contactItem}>
+                  <span style={styles.contactLabel}>🪪 License No:</span>
+                  <span style={styles.contactValue}>{doctor.doctorProfile.licenseNumber}</span>
+                </div>
+              )}
+              {doctor.doctorProfile.licenseState && (
+                <div style={styles.contactItem}>
+                  <span style={styles.contactLabel}>📍 State/Council:</span>
+                  <span style={styles.contactValue}>{doctor.doctorProfile.licenseState}</span>
+                </div>
+              )}
+              {doctor.doctorProfile.licenseExpiry && (
+                <div style={styles.contactItem}>
+                  <span style={styles.contactLabel}>📅 Valid until:</span>
+                  <span style={styles.contactValue}>{new Date(doctor.doctorProfile.licenseExpiry).toLocaleDateString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Hospital Affiliations */}
+        {doctor.hospitals && doctor.hospitals.length > 0 && (
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Hospital Affiliations</h2>
+            <div style={styles.hospitalList}>
+              {doctor.hospitals.map((h, i) => (
+                <div key={i} style={styles.hospitalItem}>
+                  <h3 style={styles.hospitalName}>🏥 {h.name}</h3>
+                  {h.department && <p style={styles.hospitalDept}>Department: {h.department}</p>}
+                  {h.address?.city && (
+                    <p style={styles.hospitalDate}>{h.address.city}{h.address.state ? `, ${h.address.state}` : ''}</p>
+                  )}
+                  {h.employmentType && (
+                    <p style={styles.hospitalDate}>{h.employmentType.replace('_', ' ')}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Verification Badge */}
+        {doctor.verificationStatus === 'VERIFIED' && (
+          <div style={{ ...styles.section, textAlign: 'center' }}>
+            <span style={{ backgroundColor: '#d1fae5', color: '#065f46', padding: '0.5rem 1.25rem', borderRadius: '20px', fontSize: '0.875rem', fontWeight: 600 }}>
+              ✅ Blockchain Verified Profile
+            </span>
           </div>
         )}
 

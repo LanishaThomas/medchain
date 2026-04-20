@@ -291,6 +291,37 @@ export default function EmergencyQRPage() {
                   </p>
                 </div>
 
+                {/* Shareable link */}
+                {qrData && (
+                  <div className="w-full bg-red-50 border border-red-200 rounded-lg p-3 text-left">
+                    <p className="text-xs font-medium text-red-700 mb-1">🔗 Emergency Access Link</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={qrData}
+                        readOnly
+                        className="flex-1 text-xs px-2 py-1.5 bg-white border border-red-200 rounded text-gray-700 truncate"
+                      />
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(qrData); }}
+                        className="px-3 py-1.5 bg-red-600 text-white text-xs rounded hover:bg-red-700 whitespace-nowrap"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="text-xs text-red-500 mt-1">Share this link with emergency responders if they cannot scan the QR.</p>
+                  </div>
+                )}
+
+                {/* Download QR */}
+                <a
+                  href={qrImage}
+                  download="emergency-qr.png"
+                  className="inline-block px-4 py-2 bg-gray-700 text-white text-sm rounded-lg hover:bg-gray-800"
+                >
+                  ⬇ Download QR Code
+                </a>
+
                 <div className="flex gap-3 justify-center">
                   <button
                     onClick={invalidateCurrentQR}
