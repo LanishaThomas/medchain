@@ -8,6 +8,7 @@ import { authService } from '@/services/authService';
 export default function DashboardRootLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [tampered, setTampered] = useState(false);
 
   useEffect(() => {
     const guard = async () => {
@@ -20,10 +21,8 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
       // Fetch fresh user from backend — ensures firstName/lastName are in sessionStorage
       try {
         await authService.getCurrentUser();
-        // Notify AuthContext to re-read from sessionStorage
         window.dispatchEvent(new Event('storage'));
       } catch {
-        // token invalid — clear and redirect
         authService.clearTokens();
         router.replace('/auth/login');
         return;
@@ -33,15 +32,23 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
       try {
         const res = await authService.getVerificationStatus();
         const data = res.data?.data;
-        // Only redirect if we got a clean false AND user is supabase-linked
         if (data?.supabaseLinked === true && data?.isEmailVerified === false) {
           authService.clearTokens();
           router.replace('/auth/login?reason=unverified');
           return;
         }
-      } catch {
-        // Any error (network, Supabase down, invalid key) — allow through
-      }
+      } catch { /* allow through */ }
+
+      // ── Blockchain tamper check on every dashboard load ────────────────
+      try {
+        const stored = sessionStorage.getItem('user');
+        const userId = stored ? JSON.parse(stored).id : null;
+        if (userId) {
+          const res = await authService.verifyIntegrity('USER_PROFILE', userId);
+          const status = res.data?.data?.verificationStatus;
+          if (status === 'TAMPERED') setTampered(true);
+        }
+      } catch { /* non-fatal — blockchain may be slow */ }
 
       setReady(true);
     };
@@ -63,5 +70,20 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
     );
   }
 
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return (
+    <>
+      {tampered && (
+        <div
+          role="alert"
+          className="fixed top-0 left-0 right-0 z-50 bg-red-600 text-white text-center py-2.5 px-4 text-sm font-semibold shadow-lg"
+        >
+          🚨 BLOCKCHAIN INTEGRITY ALERT — Your profile data has been tampered with outside the system.
+          The data no longer matches the immutable record on Polygon blockchain.
+        </div>
+      )}
+      <div className={tampered ? 'pt-10' : ''}>
+        <DashboardLayout>{children}</DashboardLayout>
+      </div>
+    </>
+  );
 }
