@@ -185,7 +185,9 @@ export default function PublicDoctorProfile() {
             <h2 style={styles.sectionTitle}>Qualifications</h2>
             <div style={styles.tagContainer}>
               {doctor.doctorProfile.qualifications.map((qual, index) => (
-                <span key={index} style={styles.tag}>{qual}</span>
+                <span key={index} style={styles.tag}>
+                  {typeof qual === 'string' ? qual : `${qual.degree}${qual.institution ? ` — ${qual.institution}` : ''}${qual.year ? ` (${qual.year})` : ''}`}
+                </span>
               ))}
             </div>
           </div>
