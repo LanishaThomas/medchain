@@ -29,19 +29,18 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
         return;
       }
 
-      // Check email verification
+      // Check email verification — non-blocking, never redirect on error
       try {
         const res = await authService.getVerificationStatus();
-        const { isEmailVerified } = res.data?.data ?? {};
-        if (isEmailVerified === false) {
-          // Only block if we got a definitive false — not on error/timeout
+        const data = res.data?.data;
+        // Only redirect if we got a clean false AND user is supabase-linked
+        if (data?.supabaseLinked === true && data?.isEmailVerified === false) {
           authService.clearTokens();
           router.replace('/auth/login?reason=unverified');
           return;
         }
       } catch {
-        // Verification check failed (network/Supabase down) — allow through
-        console.warn('[DashboardGuard] Verification check failed, allowing through');
+        // Any error (network, Supabase down, invalid key) — allow through
       }
 
       setReady(true);

@@ -69,23 +69,22 @@ const hospitalRegisterSchema = z.object({
     .max(200, 'Hospital name cannot exceed 200 characters'),
   registrationNumber: z.string()
     .min(1, 'Registration number is required'),
-  licenseNumber: z.string()
-    .min(1, 'License number is required'),
+  licenseNumber: z.string().optional(),
   licenseExpiry: dateSchema.optional(),
   hospitalType: z.enum(['general', 'specialty', 'teaching', 'community', 'clinic', 'urgent_care'])
     .default('general'),
   hospitalEmail: emailSchema,
-  hospitalPhone: phoneSchema,
-  
-  // Address
+  hospitalPhone: phoneSchema.optional(),
+
+  // Address — only city required from the registration form
   address: z.object({
-    street: z.string().min(1, 'Street is required'),
+    street: z.string().optional(),
     city: z.string().min(1, 'City is required'),
-    state: z.string().min(1, 'State is required'),
-    zipCode: z.string().min(1, 'Zip code is required'),
-    country: z.string().default('USA')
+    state: z.string().optional(),
+    zipCode: z.string().optional(),
+    country: z.string().default('India')
   }),
-  
+
   // Admin Info (creates hospital admin account)
   adminFirstName: z.string()
     .min(1, 'First name is required')
@@ -96,7 +95,7 @@ const hospitalRegisterSchema = z.object({
   adminEmail: emailSchema,
   adminPassword: passwordSchema,
   adminPhone: optionalPhoneSchema.optional(),
-  
+
   // Optional
   specialties: z.array(z.string()).optional(),
   description: z.string().max(2000).optional()
