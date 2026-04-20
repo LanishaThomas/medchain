@@ -298,12 +298,12 @@ export default function EmergencyQRPage() {
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
-                        value={qrData}
+                        value={`${window.location.origin}/emergency?token=${encodeURIComponent(qrData)}`}
                         readOnly
                         className="flex-1 text-xs px-2 py-1.5 bg-white border border-red-200 rounded text-gray-700 truncate"
                       />
                       <button
-                        onClick={() => { navigator.clipboard.writeText(qrData); }}
+                        onClick={() => navigator.clipboard.writeText(`${window.location.origin}/emergency?token=${encodeURIComponent(qrData)}`)}
                         className="px-3 py-1.5 bg-red-600 text-white text-xs rounded hover:bg-red-700 whitespace-nowrap"
                       >
                         Copy

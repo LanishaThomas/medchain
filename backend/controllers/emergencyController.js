@@ -637,3 +637,78 @@ function calculateAge(dateOfBirth) {
 }
 
 module.exports = exports;
+
+/**
+ * View Emergency Data via Link (no auth required)
+ * GET /api/emergency/view?token=<encryptedPayload>
+ *
+ * Used when the QR cannot be scanned — the encrypted token is passed
+ * as a URL query param. Returns the same emergency data as the QR scan.
+ */
+exports.viewEmergencyDataByLink = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ success: false, message: 'Token is required' });
+    }
+
+    // Decrypt the payload
+    const decryptedData = decrypt(token);
+    if (!decryptedData) {
+      return res.status(400).json({ success: false, message: 'Invalid or corrupted token' });
+    }
+
+    const { pid, tok, exp } = decryptedData;
+
+    // Check expiry
+    if (Date.now() > exp) {
+      return res.status(410).json({
+        success: false,
+        message: 'This emergency link has expired. Ask the patient to generate a new one.'
+      });
+    }
+
+    // Fetch patient
+    const patient = await User.findById(pid);
+    if (!patient) {
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+
+    // Verify token
+    const hashedToken = hashToken(tok);
+    const storedHash = patient.patientProfile?.emergencySettings?.qrAccessToken;
+    if (storedHash && storedHash !== hashedToken) {
+      return res.status(401).json({
+        success: false,
+        message: 'This link has been invalidated. Ask the patient to generate a new one.'
+      });
+    }
+
+    const profile = patient.patientProfile || {};
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        patient: {
+          name: patient.fullName,
+          dateOfBirth: patient.dateOfBirth,
+          gender: patient.gender,
+          bloodType: profile.bloodType,
+          allergies: profile.allergies || [],
+          currentMedications: profile.currentMedications || [],
+          previousSurgeries: profile.previousSurgeries || [],
+          chronicConditions: profile.chronicConditions || [],
+          emergencyContacts: profile.emergencyContacts || [],
+          insuranceProvider: profile.insuranceProvider || null,
+          insurancePolicyNumber: profile.insurancePolicyNumber || null
+        },
+        expiresAt: new Date(exp).toISOString(),
+        accessedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('viewEmergencyDataByLink error:', error.message);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve emergency data' });
+  }
+};
