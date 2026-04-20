@@ -62,7 +62,7 @@ export default function PatientPermissionsComponent() {
       setLoading(true);
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       const response = await fetch(`${API_URL}/permissions/pending`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('accessToken')}` }
       });
 
       if (response.ok) {
@@ -80,7 +80,7 @@ export default function PatientPermissionsComponent() {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       const response = await fetch(`${API_URL}/permissions`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('accessToken')}` }
       });
 
       if (response.ok) {
@@ -101,7 +101,7 @@ export default function PatientPermissionsComponent() {
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'Authorization': `Bearer ${sessionStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ notes: 'Approved by patient' })
@@ -133,7 +133,7 @@ export default function PatientPermissionsComponent() {
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'Authorization': `Bearer ${sessionStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ reason: reason || 'Rejected by patient' })
@@ -166,7 +166,7 @@ export default function PatientPermissionsComponent() {
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'Authorization': `Bearer ${sessionStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ reason })

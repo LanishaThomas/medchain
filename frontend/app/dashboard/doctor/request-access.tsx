@@ -30,7 +30,7 @@ export default function RequestAccessComponent() {
       const response = await fetch(
         `${API_URL}/permissions/search-patients?query=${encodeURIComponent(query)}`,
         {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+          headers: { 'Authorization': `Bearer ${sessionStorage.getItem('accessToken')}` }
         }
       );
 
@@ -64,7 +64,7 @@ export default function RequestAccessComponent() {
       const response = await fetch(`${API_URL}/permissions/request-access`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${sessionStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

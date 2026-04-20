@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const token = authService.getAccessToken();
         if (token && !authService.isTokenExpired()) {
-          const userData = localStorage.getItem('user');
+          const userData = sessionStorage.getItem('user');
           if (userData) {
             setUser(JSON.parse(userData));
           }
@@ -48,9 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initAuth();
 
-    // Re-read user from localStorage when dashboard layout refreshes it
+    // Re-read user from sessionStorage when dashboard layout refreshes it
     const onStorage = () => {
-      const userData = localStorage.getItem('user');
+      const userData = sessionStorage.getItem('user');
       if (userData) {
         try { setUser(JSON.parse(userData)); } catch { /* ignore */ }
       }
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       setIsLoading(true);
       await authService.login(email, password);
-      const userData = localStorage.getItem('user');
+      const userData = sessionStorage.getItem('user');
       if (userData) {
         setUser(JSON.parse(userData));
       }
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       setIsLoading(true);
       await authService.registerHospital(data);
-      const userData = localStorage.getItem('user');
+      const userData = sessionStorage.getItem('user');
       if (userData) {
         setUser(JSON.parse(userData));
       }
@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       setIsLoading(true);
       await authService.registerDoctor(data);
-      const userData = localStorage.getItem('user');
+      const userData = sessionStorage.getItem('user');
       if (userData) {
         setUser(JSON.parse(userData));
       }
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       setIsLoading(true);
       await authService.verifyOTP(phone, otp, isNewUser, userData);
-      const userDataFromStorage = localStorage.getItem('user');
+      const userDataFromStorage = sessionStorage.getItem('user');
       if (userDataFromStorage) {
         setUser(JSON.parse(userDataFromStorage));
       }
@@ -159,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setError(null);
       await authService.getCurrentUser();
-      const userData = localStorage.getItem('user');
+      const userData = sessionStorage.getItem('user');
       if (userData) {
         setUser(JSON.parse(userData));
       }

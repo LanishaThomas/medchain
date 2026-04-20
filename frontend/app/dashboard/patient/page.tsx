@@ -127,7 +127,7 @@ function PatientDashboardContent() {
       await logout();
       router.push('/auth/patient-login');
     } catch {
-      localStorage.clear();
+      sessionStorage.clear();
       router.push('/auth/patient-login');
     }
   };

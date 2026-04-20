@@ -17,10 +17,10 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
         return;
       }
 
-      // Fetch fresh user from backend — ensures firstName/lastName are in localStorage
+      // Fetch fresh user from backend — ensures firstName/lastName are in sessionStorage
       try {
         await authService.getCurrentUser();
-        // Notify AuthContext to re-read from localStorage
+        // Notify AuthContext to re-read from sessionStorage
         window.dispatchEvent(new Event('storage'));
       } catch {
         // token invalid — clear and redirect

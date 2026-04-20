@@ -77,7 +77,7 @@ function HospitalDashboardContent() {
       router.push('/auth/login');
     } catch (err) {
       console.error('Logout error:', err);
-      localStorage.clear();
+      sessionStorage.clear();
       router.push('/auth/login');
     }
   };

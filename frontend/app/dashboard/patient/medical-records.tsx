@@ -189,7 +189,7 @@ export default function MedicalRecordsComponent() {
       });
 
       // Use native fetch — axios has issues with FormData Content-Type headers
-      const token = localStorage.getItem('accessToken');
+      const token = sessionStorage.getItem('accessToken');
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://medchain-x96u.onrender.com/api';
       
       const res = await fetch(`${API_URL}/medical-records/upload`, {

@@ -39,7 +39,7 @@ class AuthService {
 
     // Initialize auth header if token exists
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('accessToken');
+      const token = sessionStorage.getItem('accessToken');
       if (token) {
         console.log('✅ Token found on init:', token.substring(0, 20) + '...');
         this.client.defaults.headers.common.Authorization = `Bearer ${token}`;
@@ -160,33 +160,33 @@ class AuthService {
       console.error('❌ Failed to decode token:', e);
     }
     
-    localStorage.setItem('accessToken', tokens.accessToken);
-    localStorage.setItem('refreshToken', tokens.refreshToken);
-    localStorage.setItem('tokenExpiry', tokens.expiresAt);
+    sessionStorage.setItem('accessToken', tokens.accessToken);
+    sessionStorage.setItem('refreshToken', tokens.refreshToken);
+    sessionStorage.setItem('tokenExpiry', tokens.expiresAt);
     this.updateAuthHeader();
   }
 
   getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('accessToken');
+    return sessionStorage.getItem('accessToken');
   }
 
   getRefreshToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('refreshToken');
+    return sessionStorage.getItem('refreshToken');
   }
 
   isTokenExpired(): boolean {
-    const expiry = localStorage.getItem('tokenExpiry');
+    const expiry = sessionStorage.getItem('tokenExpiry');
     if (!expiry) return true;
     return new Date() >= new Date(expiry);
   }
 
   clearTokens() {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('tokenExpiry');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('accessToken');
+    sessionStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('tokenExpiry');
+    sessionStorage.removeItem('user');
     this.updateAuthHeader();
   }
 
@@ -207,7 +207,7 @@ class AuthService {
     console.log('✅ Hospital registered. Admin object:', admin);
     this.clearTokens();
     this.setTokens(tokens);
-    localStorage.setItem('user', JSON.stringify({ ...admin, hospitalId: hospital.id }));
+    sessionStorage.setItem('user', JSON.stringify({ ...admin, hospitalId: hospital.id }));
     return response.data;
   }
 
@@ -218,7 +218,7 @@ class AuthService {
     // Clear any existing tokens before setting new ones
     this.clearTokens();
     this.setTokens(tokens);
-    localStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('user', JSON.stringify(user));
     return response.data;
   }
 
@@ -228,7 +228,7 @@ class AuthService {
     console.log('✅ Patient registered. User object:', user);
     this.clearTokens();
     this.setTokens(tokens);
-    localStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('user', JSON.stringify(user));
     return response.data;
   }
 
@@ -245,7 +245,7 @@ class AuthService {
     const response = await this.client.post('/auth/patient/verify-otp', payload);
     const { tokens, user } = response.data.data;
     this.setTokens(tokens);
-    localStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('user', JSON.stringify(user));
     return response.data;
   }
 
@@ -253,7 +253,7 @@ class AuthService {
     const response = await this.client.post('/auth/login', { email, password });
     const { tokens, user } = response.data.data;
     this.setTokens(tokens);
-    localStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('user', JSON.stringify(user));
     return response.data;
   }
 
@@ -280,7 +280,7 @@ class AuthService {
   async getCurrentUser() {
     const response = await this.client.get('/auth/me', { headers: this.getAuthHeader() });
     const user = response.data.data.user;
-    localStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('user', JSON.stringify(user));
     return response.data;
   }
 
@@ -312,7 +312,7 @@ class AuthService {
     const response = await this.client.post('/auth/caregiver/accept', payload);
     const { tokens, user } = response.data.data;
     this.setTokens(tokens);
-    localStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('user', JSON.stringify(user));
     return response.data;
   }
 

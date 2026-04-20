@@ -31,7 +31,7 @@ export default function EmailVerifiedPage() {
 
         if (verified) {
           setStatus('verified');
-          const stored = localStorage.getItem('user');
+          const stored = sessionStorage.getItem('user');
           const role = stored ? JSON.parse(stored).role : null;
           const path =
             role === 'doctor' ? '/dashboard/doctor' :

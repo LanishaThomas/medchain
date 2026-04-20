@@ -54,7 +54,7 @@ function LoginPageContent() {
   // If redirected from dashboard guard with ?reason=unverified, show the wall
   useEffect(() => {
     if (searchParams.get('reason') === 'unverified') {
-      const stored = localStorage.getItem('user');
+      const stored = sessionStorage.getItem('user');
       const storedEmail = stored ? JSON.parse(stored).email : '';
       if (storedEmail) setVerificationWall({ email: storedEmail });
     }
@@ -76,7 +76,7 @@ function LoginPageContent() {
         if (res.data?.data?.isEmailVerified) {
           clearInterval(pollRef.current!);
           // Redirect to the right dashboard
-          const stored = localStorage.getItem('user');
+          const stored = sessionStorage.getItem('user');
           const role = stored ? JSON.parse(stored).role : null;
           router.push(getDashboardPath(role));
         }
@@ -134,7 +134,7 @@ function LoginPageContent() {
 
     try {
       await login(email, password);
-      const stored = localStorage.getItem('user');
+      const stored = sessionStorage.getItem('user');
       const role = stored ? JSON.parse(stored).role : null;
       router.push(getDashboardPath(role));
     } catch (err: any) {
