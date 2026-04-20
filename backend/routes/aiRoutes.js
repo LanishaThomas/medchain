@@ -2,12 +2,19 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 
-// Protect all AI routes
 router.use(protect);
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY   = process.env.GROQ_API_KEY;
 
-// Models to try in order (flash models first — lower quota cost)
+// Groq models — fast, free tier, no rate-limit issues
+const GROQ_MODELS = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+  'mixtral-8x7b-32768',
+];
+
+// Gemini fallback models — valid as of 2025
 const GEMINI_MODELS = [
   'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
@@ -16,7 +23,6 @@ const GEMINI_MODELS = [
   'gemini-1.5-pro',
 ];
 
-// Helper: sleep for ms
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const SYSTEM_PROMPTS = {
@@ -55,6 +61,36 @@ const FALLBACK_RESPONSES = {
 
 // Track in-flight requests per user to prevent duplicate calls
 const inFlightByUser = new Set();
+
+/**
+ * Call Groq API — fast, generous free tier
+ */
+async function callGroq(promptText) {
+  if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
+
+  const Groq = require('groq-sdk');
+  const groq = new Groq({ apiKey: GROQ_API_KEY });
+
+  for (const model of GROQ_MODELS) {
+    try {
+      console.log(`🚀 Trying Groq model: ${model}`);
+      const completion = await groq.chat.completions.create({
+        model,
+        messages: [{ role: 'user', content: promptText }],
+        temperature: 0.7,
+        max_tokens: 800,
+      });
+      const text = completion.choices?.[0]?.message?.content;
+      if (text) {
+        console.log(`✅ Groq model ${model} responded`);
+        return text;
+      }
+    } catch (err) {
+      console.warn(`⚠️ Groq model ${model} failed: ${err.message}`);
+    }
+  }
+  throw new Error('All Groq models failed');
+}
 
 /**
  * Call Gemini API with model fallback
@@ -226,17 +262,31 @@ router.post('/chat', async (req, res) => {
 
     const fullPrompt = `${systemPrompt}\n\n${historyText ? `Recent conversation:\n${historyText}\n\n` : ''}User: ${message.trim()}\n\nAssistant:`;
 
-    // Call Gemini API
-    const aiText = await callGeminiWithFallback(fullPrompt);
+    // Call AI — Groq first (fast + free), Gemini as fallback
+    let aiText = null;
+    let usedProvider = 'groq';
 
-    console.log(`✅ AI response generated for user ${userId}`);
+    if (GROQ_API_KEY) {
+      try {
+        aiText = await callGroq(fullPrompt);
+      } catch (groqErr) {
+        console.warn(`⚠️ Groq failed, falling back to Gemini: ${groqErr.message}`);
+      }
+    }
+
+    if (!aiText) {
+      usedProvider = 'gemini';
+      aiText = await callGeminiWithFallback(fullPrompt);
+    }
+
+    console.log(`✅ AI response generated for user ${userId} via ${usedProvider}`);
 
     return res.status(200).json({
       success: true,
       data: {
         message: aiText.trim(),
         language,
-        model: 'gemini'
+        model: usedProvider
       }
     });
 
