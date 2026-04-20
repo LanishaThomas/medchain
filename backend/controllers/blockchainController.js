@@ -81,30 +81,53 @@ function serializeEntityForHash(entityType, doc) {
   }
 
   if (normalized === 'userprofile' || normalized === 'user') {
-    return {
-      _id: doc._id,
+    // Must match exactly what writeAuditLog received at registration time.
+    // Patient registration payload uses 'id' (not '_id') and limited patientProfile fields.
+    const base = {
+      id: doc._id?.toString(),
       role: doc.role,
+      email: doc.email,
       firstName: doc.firstName,
       lastName: doc.lastName,
-      email: doc.email,
       phone: doc.phone,
       dateOfBirth: doc.dateOfBirth,
       gender: doc.gender,
-      hospitalId: doc.hospitalId,
-      doctorProfile: doc.doctorProfile,
-      patientProfile: {
-        bloodType: doc.patientProfile?.bloodType,
-        allergies: doc.patientProfile?.allergies,
-        currentMedications: doc.patientProfile?.currentMedications,
-        previousSurgeries: doc.patientProfile?.previousSurgeries,
-        chronicConditions: doc.patientProfile?.chronicConditions,
-        address: doc.patientProfile?.address,
-        emergencyContacts: doc.patientProfile?.emergencyContacts,
-        insuranceProvider: doc.patientProfile?.insuranceProvider,
-        insurancePolicyNumber: doc.patientProfile?.insurancePolicyNumber,
-        emergencySettings: doc.patientProfile?.emergencySettings
-      }
     };
+
+    if (doc.role === 'patient') {
+      return {
+        ...base,
+        patientProfile: {
+          bloodType: doc.patientProfile?.bloodType,
+          allergies: doc.patientProfile?.allergies || [],
+          chronicConditions: doc.patientProfile?.chronicConditions || []
+        }
+      };
+    }
+
+    if (doc.role === 'doctor') {
+      return {
+        ...base,
+        doctorProfile: {
+          licenseNumber: doc.doctorProfile?.licenseNumber,
+          licenseState: doc.doctorProfile?.licenseState,
+          licenseExpiry: doc.doctorProfile?.licenseExpiry
+            ? new Date(doc.doctorProfile.licenseExpiry).toISOString() : null,
+          specializations: doc.doctorProfile?.specializations || [],
+          yearsOfExperience: doc.doctorProfile?.yearsOfExperience,
+          bio: doc.doctorProfile?.bio
+        }
+      };
+    }
+
+    if (doc.role === 'hospital_admin') {
+      return {
+        ...base,
+        hospitalId: doc.hospitalId?.toString()
+      };
+    }
+
+    return base;
   }
 
   return doc;
