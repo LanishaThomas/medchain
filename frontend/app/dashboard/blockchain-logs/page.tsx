@@ -171,15 +171,15 @@ export default function BlockchainLogsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
-                        log.verificationStatus === 'VERIFIED'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {log.verificationStatus || 'TAMPERED'}
-                    </span>
+                    {(log.verificationStatus || 'TAMPERED') === 'VERIFIED' ? (
+                      <span className="inline-flex px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
+                        ✅ VERIFIED
+                      </span>
+                    ) : (
+                      <span className="inline-flex px-2 py-1 rounded text-xs font-bold bg-red-600 text-white animate-pulse">
+                        🚨 TAMPERED
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-700">{log.actorId}</td>
                   <td className="px-4 py-3">

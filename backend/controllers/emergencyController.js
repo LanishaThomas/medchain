@@ -431,11 +431,28 @@ exports.getAccessHistory = async (req, res) => {
     });
     
     const total = await EmergencyAccessLog.countDocuments({ patient: patientId });
+
+    // Get blockchain verification status for this patient's emergency access record
+    let emergencyVerificationStatus = 'UNVERIFIED';
+    try {
+      emergencyVerificationStatus = await getVerificationStatusForEntity({
+        entityType: 'EMERGENCY_ACCESS',
+        entityId: patientId.toString(),
+        dbHash: null
+      });
+    } catch { /* non-fatal */ }
+
+    // Attach the same verification status to each log entry
+    // (all logs share the same patient entityId on chain)
+    const logsWithVerification = logs.map(log => ({
+      ...log.toObject ? log.toObject() : log,
+      verificationStatus: emergencyVerificationStatus
+    }));
     
     res.status(200).json({
       success: true,
       data: {
-        logs,
+        logs: logsWithVerification,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),

@@ -31,6 +31,7 @@ interface AccessLog {
   accessTime: string;
   expiresAt: string;
   accessStatus: string;
+  verificationStatus?: string;
   patientReview?: {
     reviewed: boolean;
     flaggedAsSuspicious: boolean;
@@ -464,6 +465,13 @@ export default function EmergencyQRPage() {
                         <span className={`px-3 py-1 text-sm rounded-full ${getStatusColor(log.accessStatus)}`}>
                           {log.accessStatus}
                         </span>
+
+                        {/* Blockchain verification badge */}
+                        {log.verificationStatus && log.verificationStatus !== 'UNVERIFIED' && (
+                          log.verificationStatus === 'VERIFIED'
+                            ? <span className="text-xs px-2 py-1 rounded font-semibold bg-green-100 text-green-800">✅ Verified</span>
+                            : <span className="text-xs px-2 py-1 rounded font-bold bg-red-600 text-white animate-pulse">🚨 TAMPERED</span>
+                        )}
                         
                         {!log.patientReview?.reviewed && (
                           <div className="flex gap-2">
