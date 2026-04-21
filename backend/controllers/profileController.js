@@ -69,6 +69,7 @@ exports.getPatientProfile = async (req, res) => {
           dateOfBirth: patient.dateOfBirth,
           gender: patient.gender,
           patientProfile: patient.patientProfile,
+          blockchainHash: patient.blockchainHash,
           verificationStatus
         },
         completionStatus
@@ -446,6 +447,7 @@ exports.getDoctorProfile = async (req, res) => {
     // Build response based on public/private access
     const profileData = {
       id: doctor._id,
+      updatedAt: doctor.updatedAt,
       firstName: doctor.firstName,
       lastName: doctor.lastName,
       fullName: doctor.fullName,
@@ -465,6 +467,7 @@ exports.getDoctorProfile = async (req, res) => {
       }
     };
     profileData.verificationStatus = verificationStatus;
+    profileData.blockchainHash = doctor.blockchainHash;
     
     // Add contact info based on settings
     if (isOwnProfile) {

@@ -6,6 +6,7 @@ const {
   generateJoinToken
 } = require('../services/videoSessionService');
 const { auditConsultationCompletion } = require('../services/consultationAuditService');
+const { getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
 function parseTimeToHoursMinutes(timeText) {
   if (!timeText) {
@@ -157,7 +158,16 @@ exports.getConsultationByAppointment = async (req, res) => {
               roomId: consultation.roomId,
               status: consultation.status,
               startTime: consultation.startTime,
-              endTime: consultation.endTime
+              endTime: consultation.endTime,
+              blockchainHash: consultation.blockchainHash,
+              blockchainTxHash: consultation.blockchainTxHash,
+              verificationStatus: consultation.blockchainHash
+                ? await getVerificationStatusForEntity({
+                    entityType: 'CONSULTATION',
+                    entityId: consultation._id,
+                    dbHash: consultation.blockchainHash
+                  }).catch(() => 'UNVERIFIED')
+                : 'UNVERIFIED'
             }
           : null,
         appointment: {

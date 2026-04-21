@@ -25,6 +25,7 @@ interface AppointmentItem {
   status: string;
   reason?: string;
   appointmentType?: string;
+  verificationStatus?: string;
 }
 
 interface PrescriptionItem {
@@ -277,6 +278,11 @@ function PatientDashboardContent() {
                           <span className={`text-xs px-2 py-1 rounded-full font-semibold flex-shrink-0 capitalize ${tagCls}`}>
                             {apt.status}
                           </span>
+                          {apt.verificationStatus && apt.verificationStatus !== 'UNVERIFIED' && (
+                            apt.verificationStatus === 'VERIFIED'
+                              ? <span className="text-xs px-1.5 py-0.5 rounded font-semibold bg-green-100 text-green-800">✅</span>
+                              : <span className="text-xs px-1.5 py-0.5 rounded font-bold bg-red-600 text-white animate-pulse">🚨</span>
+                          )}
                         </div>
                       );
                     })}

@@ -22,6 +22,21 @@ const getFileType = (mimetype) => {
   return 'other';
 };
 
+// Helper: build current-data payload for tamper detection
+const getMedicalRecordCurrentData = (item) => ({
+  id: item._id?.toString(),
+  patient: item.patient?.toString(),
+  uploadedBy: item.uploadedBy?.toString(),
+  title: item.title,
+  description: item.description || '',
+  fileName: item.fileName,
+  fileSize: item.fileSize,
+  fileType: item.fileType,
+  mimeType: item.mimeType,
+  recordType: item.recordType,
+  fileHash: item.fileHash || ''
+});
+
 // Multer error handler middleware
 const handleMulterError = (err, req, res, next) => {
   if (err) {
@@ -276,7 +291,8 @@ router.get('/my-records', protect, async (req, res) => {
       {
         entityType: 'MEDICAL_RECORD',
         getId: (item) => item._id,
-        getHash: (item) => item.blockchainHash
+        getHash: (item) => item.blockchainHash,
+        getCurrentData: getMedicalRecordCurrentData
       }
     );
 
@@ -396,7 +412,8 @@ router.get('/patient/:patientId', protect, async (req, res) => {
       {
         entityType: 'MEDICAL_RECORD',
         getId: (item) => item._id,
-        getHash: (item) => item.blockchainHash
+        getHash: (item) => item.blockchainHash,
+        getCurrentData: getMedicalRecordCurrentData
       }
     );
 

@@ -64,6 +64,7 @@ function HospitalDashboardContent() {
   const [activeDoctors, setActiveDoctors] = useState<ActiveDoctorProfile[]>([]);
   const [stats, setStats]           = useState<HospitalStats>({ approvedDoctors: 0, pendingApplications: 0, totalRecords: 0 });
   const [hospitalName, setHospitalName] = useState('');
+  const [hospitalBlockchainStatus, setHospitalBlockchainStatus] = useState<string | null>(null);
   const [isLoading, setIsLoading]   = useState(true);
   const [error, setError]           = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -94,6 +95,9 @@ function HospitalDashboardContent() {
       if (profileRes.data?.success) {
         setHospitalName(profileRes.data.data.hospital.name);
         setStats(profileRes.data.data.stats);
+        if (profileRes.data.data.hospital.blockchainVerificationStatus) {
+          setHospitalBlockchainStatus(profileRes.data.data.hospital.blockchainVerificationStatus);
+        }
       }
       if (applicationsRes.data?.success) {
         setPendingDoctors(applicationsRes.data.data.applications);
@@ -292,6 +296,14 @@ function HospitalDashboardContent() {
               <p className="text-white/80 text-base mt-1">
                 Welcome back, <span className="font-bold text-white underline decoration-purple-400/30 underline-offset-4">{hospitalName || 'Your Hospital'}</span>
               </p>
+              {hospitalBlockchainStatus && hospitalBlockchainStatus !== 'UNVERIFIED' && (
+                <div className="mt-2">
+                  {hospitalBlockchainStatus === 'VERIFIED'
+                    ? <span className="text-xs px-2 py-1 rounded font-semibold bg-white/20 text-white">✅ Blockchain Verified</span>
+                    : <span className="text-xs px-2 py-1 rounded font-bold bg-red-700 text-white animate-pulse">🚨 TAMPERED — Hospital data integrity compromised</span>
+                  }
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <Link href="/dashboard/blockchain-logs"

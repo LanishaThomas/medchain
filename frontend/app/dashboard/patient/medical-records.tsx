@@ -610,13 +610,11 @@ export default function MedicalRecordsComponent() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
-                      record.verificationStatus === 'VERIFIED'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {record.verificationStatus || 'TAMPERED'}
-                    </span>
+                    {(record.verificationStatus || 'TAMPERED') === 'VERIFIED' ? (
+                      <span className="text-xs px-2 py-1 rounded font-semibold bg-green-100 text-green-800">✅ Verified</span>
+                    ) : (
+                      <span className="text-xs px-2 py-1 rounded font-bold bg-red-600 text-white animate-pulse">🚨 TAMPERED</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
                     {formatSize(record.fileSize)}
@@ -768,13 +766,11 @@ export default function MedicalRecordsComponent() {
                 <div>
                   <label className="text-sm text-gray-500">Verification</label>
                   <p>
-                    <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
-                      viewingRecord.verificationStatus === 'VERIFIED'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {viewingRecord.verificationStatus || 'TAMPERED'}
-                    </span>
+                    {(viewingRecord.verificationStatus || 'TAMPERED') === 'VERIFIED' ? (
+                      <span className="text-xs px-2 py-1 rounded font-semibold bg-green-100 text-green-800">✅ Verified</span>
+                    ) : (
+                      <span className="text-xs px-2 py-1 rounded font-bold bg-red-600 text-white animate-pulse">🚨 TAMPERED</span>
+                    )}
                   </p>
                 </div>
                 {viewingRecord.hospital && (

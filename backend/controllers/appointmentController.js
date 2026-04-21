@@ -9,6 +9,7 @@ const {
   buildSnapshot,
   restoreSnapshot
 } = require('../services/blockchainConsistencyService');
+const { getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
 async function syncAppointmentIntegrity({
   appointment,
@@ -270,11 +271,27 @@ const getMyAppointments = async (req, res) => {
 
     const total = await Appointment.countDocuments(query);
 
+    // Add verificationStatus to each appointment
+    const appointmentsWithVerification = await Promise.all(appointments.map(async (apt) => {
+      let verificationStatus = 'UNVERIFIED';
+      if (apt.blockchainHash) {
+        try {
+          verificationStatus = await getVerificationStatusForEntity({
+            entityType: 'APPOINTMENT',
+            entityId: apt._id,
+            dbHash: apt.blockchainHash
+          });
+        } catch { /* non-fatal */ }
+      }
+      return { apt, verificationStatus };
+    }));
+
     res.json({
       success: true,
-      data: appointments.map(apt => ({
+      data: appointmentsWithVerification.map(({ apt, verificationStatus }) => ({
         id: apt._id,
         appointmentNumber: apt.appointmentNumber,
+        verificationStatus,
         doctor: {
           id: apt.doctor._id,
           name: `Dr. ${apt.doctor.firstName} ${apt.doctor.lastName}`,

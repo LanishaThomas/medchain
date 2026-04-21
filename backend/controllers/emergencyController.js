@@ -9,6 +9,7 @@ const EmergencyAccessLog = require('../models/EmergencyAccessLog');
 const Notification = require('../models/Notification');
 const { encrypt, decrypt, generateAccessToken, hashToken } = require('../utils/encryption');
 const { writeAuditLog } = require('../services/blockchainAuditService');
+const { getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
 /**
  * Generate Emergency QR Token for Patient
@@ -88,6 +89,16 @@ exports.generateEmergencyQR = async (req, res) => {
       }
     });
     
+    // Get verification status for this patient's emergency access record
+    let emergencyVerificationStatus = 'UNVERIFIED';
+    try {
+      emergencyVerificationStatus = await getVerificationStatusForEntity({
+        entityType: 'EMERGENCY_ACCESS',
+        entityId: patientId.toString(),
+        dbHash: null
+      });
+    } catch { /* non-fatal */ }
+
     res.status(200).json({
       success: true,
       message: 'Emergency QR generated successfully',
@@ -96,7 +107,8 @@ exports.generateEmergencyQR = async (req, res) => {
         expiresAt: expiresAt.toISOString(),
         durationMinutes: accessDuration,
         patientName: patient.fullName,
-        instructions: 'Show this QR code to hospital staff in case of emergency'
+        instructions: 'Show this QR code to hospital staff in case of emergency',
+        verificationStatus: emergencyVerificationStatus
       }
     });
     

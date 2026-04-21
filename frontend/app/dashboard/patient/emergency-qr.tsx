@@ -46,6 +46,7 @@ export default function EmergencyQRPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState<'generate' | 'active' | 'history'>('generate');
+  const [emergencyVerificationStatus, setEmergencyVerificationStatus] = useState<string | null>(null);
   
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
   const [accessHistory, setAccessHistory] = useState<AccessLog[]>([]);
@@ -103,6 +104,7 @@ export default function EmergencyQRPage() {
         const data = response.data.data;
         setQrData(data.qrData);
         setExpiresAt(new Date(data.expiresAt));
+        if (data.verificationStatus) setEmergencyVerificationStatus(data.verificationStatus);
         
         // Generate QR code image
         const qrImageUrl = await QRCode.toDataURL(data.qrData, {
@@ -278,6 +280,16 @@ export default function EmergencyQRPage() {
                 <div className="inline-block p-4 bg-white rounded-lg shadow-lg border-2 border-red-200">
                   <img src={qrImage} alt="Emergency QR Code" className="w-72 h-72" />
                 </div>
+
+                {/* Blockchain verification status */}
+                {emergencyVerificationStatus && emergencyVerificationStatus !== 'UNVERIFIED' && (
+                  <div>
+                    {emergencyVerificationStatus === 'VERIFIED'
+                      ? <span className="text-xs px-2 py-1 rounded font-semibold bg-green-100 text-green-800">✅ Blockchain Verified</span>
+                      : <span className="text-xs px-2 py-1 rounded font-bold bg-red-600 text-white animate-pulse">🚨 TAMPERED — Emergency data integrity compromised</span>
+                    }
+                  </div>
+                )}
                 
                 <div className="text-center">
                   <p className="text-lg font-semibold text-gray-900">Time Remaining</p>

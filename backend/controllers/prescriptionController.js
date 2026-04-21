@@ -271,7 +271,19 @@ const getDoctorPrescriptions = async (req, res) => {
     const verified = await attachVerificationStatus(mapped, {
       entityType: 'PRESCRIPTION',
       getId: (item) => item.id,
-      getHash: (item) => item.blockchainHash
+      getHash: (item) => item.blockchainHash,
+      getCurrentData: (item) => ({
+        id: item.id?.toString(),
+        prescriptionNumber: item.prescriptionNumber,
+        patientId: item.patientId?.toString(),
+        doctorId: prescriptions.find(p => p._id.toString() === item.id?.toString())?.doctorId?.toString(),
+        hospitalId: item.hospitalId?.toString(),
+        medicines: item.medicines,
+        dosage: prescriptions.find(p => p._id.toString() === item.id?.toString())?.dosage || '',
+        notes: item.notes || '',
+        status: item.status,
+        hash: item.hash
+      })
     }).catch(() => mapped.map(item => ({ ...item, verificationStatus: 'UNVERIFIED' })));
 
     return res.status(200).json({
@@ -322,7 +334,19 @@ const getPatientPrescriptions = async (req, res) => {
     const verified = await attachVerificationStatus(mapped, {
       entityType: 'PRESCRIPTION',
       getId: (item) => item.id,
-      getHash: (item) => item.blockchainHash
+      getHash: (item) => item.blockchainHash,
+      getCurrentData: (item) => ({
+        id: item.id?.toString(),
+        prescriptionNumber: item.prescriptionNumber,
+        patientId: item.patientId?.toString() || patientId.toString(),
+        doctorId: item.doctorId?.toString(),
+        hospitalId: item.hospitalId?.toString(),
+        medicines: item.medicines,
+        dosage: prescriptions.find(p => p._id.toString() === item.id?.toString())?.dosage || '',
+        notes: item.notes || '',
+        status: item.status,
+        hash: item.hash
+      })
     }).catch(() => mapped.map(item => ({ ...item, verificationStatus: 'UNVERIFIED' })));
 
     return res.status(200).json({

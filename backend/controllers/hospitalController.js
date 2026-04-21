@@ -597,6 +597,18 @@ exports.getHospitalProfile = async (req, res, next) => {
       MedicalRecord.countDocuments({ hospital: hospital._id, status: 'active' })
     ]);
 
+    // Blockchain tamper check for hospital profile
+    let blockchainVerificationStatus = 'UNVERIFIED';
+    if (hospital.blockchainHash) {
+      try {
+        blockchainVerificationStatus = await getVerificationStatusForEntity({
+          entityType: 'HOSPITAL_PROFILE',
+          entityId: hospital._id,
+          dbHash: hospital.blockchainHash
+        });
+      } catch { /* non-fatal */ }
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -624,6 +636,7 @@ exports.getHospitalProfile = async (req, res, next) => {
           logo: hospital.logo,
           images: hospital.images,
           verificationStatus: hospital.verificationStatus,
+          blockchainVerificationStatus,
           isActive: hospital.isActive,
           createdAt: hospital.createdAt
         },

@@ -36,6 +36,7 @@ interface ProfileSettings {
 interface DoctorProfile {
   id: string;
   verificationStatus?: 'VERIFIED' | 'TAMPERED';
+  blockchainHash?: string;
   updatedAt?: string;
   email: string;
   phone: string;
@@ -324,13 +325,30 @@ export default function DoctorProfilePage() {
             Last Modified: {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleString() : 'N/A'}
           </p>
           {profile?.verificationStatus && (
-            <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-semibold ${
-              profile.verificationStatus === 'VERIFIED'
-                ? 'bg-green-100 text-green-800'
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {profile.verificationStatus}
-            </span>
+            profile.verificationStatus === 'VERIFIED' ? (
+              <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
+                ✅ Blockchain Verified
+              </span>
+            ) : (
+              <div className="mt-2 p-3 bg-red-50 border border-red-300 rounded-lg">
+                <p className="text-sm font-bold text-red-700 flex items-center gap-1">
+                  🚨 TAMPERED — Blockchain Integrity Violation
+                </p>
+                <p className="text-xs text-red-600 mt-1">
+                  The following fields no longer match the immutable record on Polygon blockchain:
+                </p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {['Name', 'Email', 'Phone', 'Gender', 'License', 'Specializations', 'Experience', 'Bio'].map(f => (
+                    <span key={f} className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium border border-red-200">
+                      ⚠ {f}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-red-500 mt-2">
+                  Chain hash: <code className="font-mono">{profile.blockchainHash?.slice(0, 20)}...</code>
+                </p>
+              </div>
+            )
           )}
         </div>
         {!editMode ? (
