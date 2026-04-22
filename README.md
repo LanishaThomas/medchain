@@ -1,123 +1,55 @@
 # MedChain
 
-MedChain is a full-stack healthcare platform with:
-- Backend API (Express + MongoDB)
-- Frontend app (Next.js)
-- Blockchain workspace (Hardhat)
+MedChain is an integrated healthcare platform combining a backend API, a Next.js frontend, and a blockchain workspace for smart-contract-related features.
 
-## Prerequisites
+This repository contains three main workspaces:
 
-- Git
-- Node.js 18+ and npm
-- MongoDB (local or Atlas)
+- Backend: [backend](backend)
+- Frontend: [frontend](frontend)
+- Blockchain: [blockchain](blockchain)
 
-## 1. Clone
+Quick links:
 
-```bash
+- Setup summary for backend: [backend/SETUP_SUMMARY.md](backend/SETUP_SUMMARY.md)
+- Blockchain workspace docs: [blockchain/README.md](blockchain/README.md)
+
+Start here:
+
+- For developer-focused setup see: [README_TECHNICAL.md](README_TECHNICAL.md)
+- For a non-technical project overview see: [README_NON_TECHNICAL.md](README_NON_TECHNICAL.md)
+
+Quick start (Windows):
+
+1. Clone the repo and open Powershell in the project root:
+
+```powershell
 git clone <YOUR_REPO_URL>
 cd medchain
 ```
 
-## 2. Install Dependencies
+2. Use the provided root scripts to start each workspace (these handle common dev defaults):
 
-Install each workspace separately:
-
-```bash
-cd backend
-npm install
-
-cd ..\frontend
-npm install
-
-cd ..\blockchain
-npm install
-
-cd ..
-```
-
-## 3. Environment Setup
-
-### Backend
-
-Create `backend/.env` from template:
-
-PowerShell:
 ```powershell
-Copy-Item backend/.env.example backend/.env
+.\start-backend.bat    # starts the backend
+.\start-frontend.bat   # starts the frontend
 ```
 
-Then update at least these values in `backend/.env`:
+Notes and useful commands:
 
-```env
-NODE_ENV=development
-PORT=5000
-MONGO_URI=mongodb://localhost:27017/medchain
-JWT_SECRET=your-super-secret-jwt-key-change-in-production-min-32-chars
-FRONTEND_URL=http://localhost:3000
-```
+- Install dependencies per workspace if you prefer manual control:
 
-### Frontend
-
-Create `frontend/.env.local` from template:
-
-PowerShell:
 ```powershell
-Copy-Item frontend/.env.example frontend/.env.local
+cd backend && npm install
+cd ..\frontend && npm install
+cd ..\blockchain && npm install
 ```
 
-Default value:
+- If you need guided setup or summaries, see [backend/SETUP_SUMMARY.md](backend/SETUP_SUMMARY.md) and the `backend/SETUP_GUIDE.js` helper files.
 
-```env
-NEXT_PUBLIC_API_URL=http://localhost:5000/api
-```
+Where to go next:
 
-## 4. Run the App
+- Developers: open [README_TECHNICAL.md](README_TECHNICAL.md) for detailed environment, build, and debug instructions.
+- Product / non-technical audience: open [README_NON_TECHNICAL.md](README_NON_TECHNICAL.md) for project goals, features, and how to try the app.
 
-Use two terminals.
-
-### Terminal 1: Start Backend
-
-```bash
-cd backend
-npm run dev
-```
-
-Windows shortcut from project root:
-
-```bat
-start-backend.bat
-```
-
-### Terminal 2: Start Frontend
-
-```bash
-cd frontend
-npm run dev
-```
-
-Windows shortcut from project root:
-
-```bat
-start-frontend.bat
-```
-
-## 5. Verify
-
-- Frontend: `http://localhost:3000`
-- Backend API health: `http://localhost:5000/api/health`
-
-## Optional: Blockchain Workspace
-
-```bash
-cd blockchain
-npm install
-```
-
-The blockchain package is available for smart contract development with Hardhat.
-
-## Troubleshooting
-
-- If backend fails on missing env values, re-check `backend/.env`.
-- If frontend cannot call API, verify `NEXT_PUBLIC_API_URL` in `frontend/.env.local`.
-- If MongoDB errors occur, confirm your `MONGO_URI` and that MongoDB is running.
+If anything in this top-level guide is unclear or you hit problems, I can update the technical README with exact commands for your environment and verify them locally if you want.
 

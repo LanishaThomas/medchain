@@ -163,6 +163,24 @@ app.use('/api/consultations', consultationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/payment', paymentRoutes);
 
+// ── Support screenshot upload (authenticated, uploads to Cloudinary) ──────────
+const multer = require('multer');
+const { uploadToCloudinary, deleteLocalFile } = require('./utils/cloudinary');
+const { protect: _protect } = require('./middleware/authMiddleware');
+const _multer = multer({ dest: require('os').tmpdir(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+app.post('/api/support/upload-screenshot', _protect, _multer.single('screenshot'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
+    const result = await uploadToCloudinary(req.file.path, `support_${req.user.id}`);
+    deleteLocalFile(req.file.path);
+    if (!result) return res.status(500).json({ success: false, message: 'Cloudinary upload failed' });
+    res.json({ success: true, url: result.url });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // 404 handler
 app.use((req, res, next) => {
   res.status(404).json({

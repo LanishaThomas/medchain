@@ -324,6 +324,9 @@ export default function DoctorProfilePage() {
           <p className="text-xs text-gray-500 mt-1">
             Last Modified: {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleString() : 'N/A'}
           </p>
+          <p className="text-xs text-gray-400 mt-0.5 font-mono select-all">
+            User ID: {profile?.id || '—'}
+          </p>
           {profile?.verificationStatus && (
             profile.verificationStatus === 'VERIFIED' ? (
               <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
