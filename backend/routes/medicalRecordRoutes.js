@@ -27,14 +27,18 @@ const getMedicalRecordCurrentData = (item) => ({
   id: item._id?.toString(),
   patient: item.patient?.toString(),
   uploadedBy: item.uploadedBy?.toString(),
+  hospital: item.hospital ? item.hospital?.toString() : null,
   title: item.title,
-  description: item.description || '',
+  description: item.description,
+  fileHash: item.fileHash,
   fileName: item.fileName,
   fileSize: item.fileSize,
   fileType: item.fileType,
   mimeType: item.mimeType,
   recordType: item.recordType,
-  fileHash: item.fileHash || ''
+  clinicalData: item.clinicalData || {},  // MongoDB returns undefined when empty; upload writes {}
+  tags: item.tags || [],
+  status: item.status
 });
 
 // Multer error handler middleware
