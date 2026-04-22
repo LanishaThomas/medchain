@@ -12,6 +12,8 @@ const { attachVerificationStatus, getVerificationStatusForEntity } = require('..
 const { notify } = require('../services/notificationService');
 const { reAuditConsultation } = require('../services/consultationAuditService');
 
+// Helper is now Prescription.getCanonicalData(doc)
+
 const createPrescription = async (req, res) => {
   try {
     const doctorId = req.user.id;
@@ -125,18 +127,7 @@ const createPrescription = async (req, res) => {
           entityId: prescription._id.toString(),
           actorId: doctorId.toString(),
           actionType: 'CREATE',
-          hashSource: {
-            id: prescription._id.toString(),
-            prescriptionNumber: prescription.prescriptionNumber,
-            patientId: prescription.patientId.toString(),
-            doctorId: prescription.doctorId.toString(),
-            hospitalId: prescription.hospitalId.toString(),
-            medicines: prescription.medicines,
-            dosage: prescription.dosage,
-            notes: prescription.notes,
-            status: prescription.status,
-            hash: prescription.hash
-          },
+          hashSource: Prescription.getCanonicalData(prescription),
           versioning: {
             beforeSnapshot: null,
             afterSnapshot,
@@ -221,7 +212,8 @@ const createPrescription = async (req, res) => {
         verificationStatus: await getVerificationStatusForEntity({
           entityType: 'PRESCRIPTION',
           entityId: populatedPrescription._id,
-          dbHash: populatedPrescription.blockchainHash
+          dbHash: populatedPrescription.blockchainHash,
+          currentData: Prescription.getCanonicalData(populatedPrescription)
         }),
         createdAt: populatedPrescription.createdAt
       }
@@ -272,18 +264,7 @@ const getDoctorPrescriptions = async (req, res) => {
       entityType: 'PRESCRIPTION',
       getId: (item) => item.id,
       getHash: (item) => item.blockchainHash,
-      getCurrentData: (item) => ({
-        id: item.id?.toString(),
-        prescriptionNumber: item.prescriptionNumber,
-        patientId: item.patientId?.toString(),
-        doctorId: prescriptions.find(p => p._id.toString() === item.id?.toString())?.doctorId?.toString(),
-        hospitalId: item.hospitalId?.toString(),
-        medicines: item.medicines,
-        dosage: prescriptions.find(p => p._id.toString() === item.id?.toString())?.dosage || '',
-        notes: item.notes || '',
-        status: item.status,
-        hash: item.hash
-      })
+      getCurrentData: (item) => Prescription.getCanonicalData(prescriptions.find(p => p._id.toString() === item.id?.toString()))
     }).catch(() => mapped.map(item => ({ ...item, verificationStatus: 'UNVERIFIED' })));
 
     return res.status(200).json({
@@ -335,18 +316,7 @@ const getPatientPrescriptions = async (req, res) => {
       entityType: 'PRESCRIPTION',
       getId: (item) => item.id,
       getHash: (item) => item.blockchainHash,
-      getCurrentData: (item) => ({
-        id: item.id?.toString(),
-        prescriptionNumber: item.prescriptionNumber,
-        patientId: item.patientId?.toString() || patientId.toString(),
-        doctorId: item.doctorId?.toString(),
-        hospitalId: item.hospitalId?.toString(),
-        medicines: item.medicines,
-        dosage: prescriptions.find(p => p._id.toString() === item.id?.toString())?.dosage || '',
-        notes: item.notes || '',
-        status: item.status,
-        hash: item.hash
-      })
+      getCurrentData: (item) => Prescription.getCanonicalData(prescriptions.find(p => p._id.toString() === item.id?.toString()))
     }).catch(() => mapped.map(item => ({ ...item, verificationStatus: 'UNVERIFIED' })));
 
     return res.status(200).json({

@@ -231,4 +231,34 @@ permissionSchema.statics.expirePermissions = async function() {
   return result;
 };
 
+// Static Helper: Get deterministic data for blockchain hashing
+permissionSchema.statics.getCanonicalData = function(doc) {
+  if (!doc) return null;
+
+  const toId = (v) => {
+    if (!v) return null;
+    if (typeof v === 'string') return v;
+    if (v._id) return v._id.toString();
+    return v.toString();
+  };
+
+  const formatDate = (d) => {
+    if (!d) return null;
+    return (d instanceof Date ? d.toISOString() : new Date(d).toISOString());
+  };
+
+  return {
+    id: toId(doc._id),
+    patientId: toId(doc.patient),
+    doctorId: toId(doc.doctor),
+    status: doc.status,
+    accessType: doc.accessType,
+    requestedAt: formatDate(doc.requestedAt),
+    approvedAt: formatDate(doc.approvedAt),
+    expiryDate: formatDate(doc.expiryDate),
+    requestReason: doc.requestReason || '',
+    rejectionReason: doc.rejectionReason || null
+  };
+};
+
 module.exports = mongoose.model('Permission', permissionSchema);

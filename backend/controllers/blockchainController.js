@@ -138,6 +138,31 @@ function serializeEntityForHash(entityType, doc) {
   return doc;
 }
 
+function serializeEntityForHash(entityType, doc) {
+  if (!doc) return null;
+  const normalized = normalizeEntityType(entityType);
+  const Model = ENTITY_MODEL_MAP[normalized];
+  
+  if (Model && typeof Model.getCanonicalData === 'function') {
+    return Model.getCanonicalData(doc);
+  }
+
+  // Fallback for models without statics
+  if (typeof doc.toObject === 'function') {
+    return doc.toObject({
+      depopulate: true,
+      virtuals: false,
+      flattenMaps: true,
+      versionKey: false
+    });
+  }
+  return doc;
+}
+
+function normalizeEntityType(entityType) {
+  return String(entityType || '').toLowerCase().replace(/_/g, '');
+}
+
 exports.getLogs = async (req, res, next) => {
   try {
     const { entityType, actionType, actorId, entityId, page = 1, limit = 50 } = req.query;

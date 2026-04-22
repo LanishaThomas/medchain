@@ -146,6 +146,12 @@ const medicalRecordSchema = new mongoose.Schema({
   
   localPath: {
     type: String
+  },
+  
+  hash: {
+    type: String,
+    required: true,
+    index: true
   }
   
 }, {
@@ -154,12 +160,59 @@ const medicalRecordSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
+// Deterministic Internal Hash (matches Prescription pattern)
+medicalRecordSchema.pre('validate', function() {
+  if (!this.hash) {
+    const crypto = require('crypto');
+    
+    const toId = (v) => {
+      if (!v) return null;
+      if (typeof v === 'string') return v;
+      if (v._id) return v._id.toString();
+      return v.toString();
+    };
+
+    const getClinicalData = (cd) => {
+      if (!cd) return {};
+      return {
+        testName: cd.testName || '',
+        testDate: cd.testDate ? (new Date(cd.testDate).toISOString()) : '',
+        labName: cd.labName || '',
+        doctorName: cd.doctorName || '',
+        diagnosis: cd.diagnosis || '',
+        notes: cd.notes || ''
+      };
+    };
+
+    const payload = {
+      patient: toId(this.patient),
+      uploadedBy: toId(this.uploadedBy),
+      hospital: this.hospital ? toId(this.hospital) : null,
+      title: this.title,
+      fileHash: this.fileHash,
+      fileName: this.fileName,
+      fileSize: this.fileSize,
+      fileType: this.fileType,
+      mimeType: this.mimeType,
+      recordType: this.recordType,
+      clinicalData: getClinicalData(this.clinicalData),
+      status: this.status || 'active'
+    };
+
+    this.hash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(payload))
+      .digest('hex');
+  }
+});
+
 // Indexes for efficient queries
 medicalRecordSchema.index({ patient: 1, createdAt: -1 });
 medicalRecordSchema.index({ patient: 1, recordType: 1 });
 medicalRecordSchema.index({ uploadedBy: 1, createdAt: -1 });
 medicalRecordSchema.index({ hospital: 1, patient: 1 });
 medicalRecordSchema.index({ fileHash: 1 }, { unique: true });
+medicalRecordSchema.index({ hash: 1 });
 
 // Virtual: formatted file size
 medicalRecordSchema.virtual('formattedSize').get(function() {
@@ -221,6 +274,18 @@ medicalRecordSchema.statics.canAccess = async function(recordId, userId, userRol
   }
   
   return { allowed: false, reason: 'Access denied' };
+};
+
+// Static Helper: Get deterministic data for blockchain hashing
+medicalRecordSchema.statics.getCanonicalData = function(doc) {
+  if (!doc) return null;
+  
+  return {
+    id: (doc._id || doc.id)?.toString(),
+    patient: (doc.patient?.id || doc.patient?._id || doc.patient)?.toString(),
+    status: doc.status,
+    hash: doc.hash // Anchoring the STABLE internal hash to the blockchain
+  };
 };
 
 module.exports = mongoose.model('MedicalRecord', medicalRecordSchema);

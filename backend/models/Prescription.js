@@ -72,4 +72,33 @@ prescriptionSchema.pre('validate', function() {
   }
 });
 
+// Static Helper: Get deterministic data for blockchain hashing
+prescriptionSchema.statics.getCanonicalData = function(doc) {
+  if (!doc) return null;
+
+  const toId = (v) => {
+    if (!v) return null;
+    if (typeof v === 'string') return v;
+    if (v._id) return v._id.toString();
+    return v.toString();
+  };
+
+  return {
+    id: toId(doc._id),
+    patientId: toId(doc.patientId),
+    doctorId: toId(doc.doctorId),
+    hospitalId: toId(doc.hospitalId),
+    prescriptionNumber: doc.prescriptionNumber,
+    medicines: Array.isArray(doc.medicines) ? doc.medicines.map(m => ({
+      name: m.name,
+      dosage: m.dosage,
+      notes: m.notes || undefined // Use undefined to strip empty notes in normalization
+    })) : [],
+    dosage: doc.dosage,
+    notes: doc.notes || undefined,
+    status: doc.status,
+    hash: doc.hash
+  };
+};
+
 module.exports = mongoose.model('Prescription', prescriptionSchema);

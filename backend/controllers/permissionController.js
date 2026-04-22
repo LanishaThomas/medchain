@@ -10,6 +10,8 @@ const {
 } = require('../services/blockchainConsistencyService');
 const { attachVerificationStatus, getVerificationStatusForEntity } = require('../services/entityVerificationService');
 
+// Helper is now Permission.getCanonicalData(doc)
+
 // ============================================
 // DOCTOR: REQUEST ACCESS
 // ============================================
@@ -75,15 +77,7 @@ exports.requestAccess = async (req, res, next) => {
           actorId: doctorId.toString(),
           actionType: 'CREATE',
           metadata: { event: 'ACCESS_DURATION_DEFINED' },
-          hashSource: {
-            id: permission._id.toString(),
-            patient: permission.patient.toString(),
-            doctor: permission.doctor.toString(),
-            accessType: permission.accessType,
-            status: permission.status,
-            requestReason: permission.requestReason,
-            expiryDate: permission.expiryDate
-          },
+          hashSource: Permission.getCanonicalData(permission),
           createdId: permission._id,
           dbState: {
             model: 'Permission',
@@ -143,7 +137,8 @@ exports.requestAccess = async (req, res, next) => {
         verificationStatus: await getVerificationStatusForEntity({
           entityType: 'PERMISSION',
           entityId: permission._id,
-          dbHash: permission.blockchainHash
+          dbHash: permission.blockchainHash,
+          currentData: Permission.getCanonicalData(permission)
         })
       }
     });
@@ -196,7 +191,8 @@ exports.getMyAccessRequests = async (req, res, next) => {
     const verifiedRequests = await attachVerificationStatus(mappedRequests, {
       entityType: 'PERMISSION',
       getId: (item) => item.id,
-      getHash: (item) => item.blockchainHash
+      getHash: (item) => item.blockchainHash,
+      getCurrentData: (item) => Permission.getCanonicalData(item)
     });
 
     res.status(200).json({
@@ -311,7 +307,8 @@ exports.getPendingRequests = async (req, res, next) => {
     const verifiedPending = await attachVerificationStatus(mappedPending, {
       entityType: 'PERMISSION',
       getId: (item) => item.id,
-      getHash: (item) => item.blockchainHash
+      getHash: (item) => item.blockchainHash,
+      getCurrentData: (item) => Permission.getCanonicalData(item)
     });
 
     res.status(200).json({
@@ -385,16 +382,7 @@ exports.approveAccess = async (req, res, next) => {
           actorId: patientId.toString(),
           actionType: 'APPROVE',
           metadata: { event: 'ACCESS_GRANTED' },
-          hashSource: {
-            id: permission._id.toString(),
-            patientId: permission.patient.toString(),
-            doctorId: permission.doctor.toString(),
-            accessType: permission.accessType,
-            status: permission.status,
-            approvedAt: permission.approvedAt,
-            expiryDate: permission.expiryDate,
-            notes: notes || ''
-          },
+          hashSource: Permission.getCanonicalData(permission),
           previousSnapshot,
           dbState: {
             model: 'Permission',
@@ -421,40 +409,27 @@ exports.approveAccess = async (req, res, next) => {
       hashFromResult
     );
 
-    await permission.populate('doctor', 'firstName lastName email');
-    await permission.populate('patient', 'firstName lastName');
-
-    console.log(`✅ Permission approved:`, {
-      permissionId: permission._id,
-      patientId: patientId,
-      doctorId: permission.doctor._id,
-      accessType: permission.accessType
-    });
-
-    // Notify doctor that access was approved
-    notify(permission.doctor._id, {
-      type: 'permission',
-      title: 'Access Request Approved ✅',
-      message: `${permission.patient.firstName} ${permission.patient.lastName} approved your ${permission.accessType} access request.`,
-      priority: 'high',
-      data: { permissionId: permission._id, accessType: permission.accessType }
-    }).catch(() => {});
+    // Reload the permission to get fresh blockchain fields
+    const updatedPermission = await Permission.findById(permission._id)
+      .populate('doctor', 'firstName lastName email')
+      .populate('patient', 'firstName lastName');
 
     res.status(200).json({
       success: true,
       message: 'Access approved successfully',
       data: {
-        id: permission._id,
-        doctor: `${permission.doctor.firstName} ${permission.doctor.lastName}`,
-        accessType: permission.accessType,
-        status: permission.status,
-        approvedAt: permission.approvedAt,
-        expiryDate: permission.expiryDate,
-        daysRemaining: permission.daysRemaining,
+        id: updatedPermission._id,
+        doctor: `${updatedPermission.doctor.firstName} ${updatedPermission.doctor.lastName}`,
+        accessType: updatedPermission.accessType,
+        status: updatedPermission.status,
+        approvedAt: updatedPermission.approvedAt,
+        expiryDate: updatedPermission.expiryDate,
+        daysRemaining: updatedPermission.daysRemaining,
         verificationStatus: await getVerificationStatusForEntity({
           entityType: 'PERMISSION',
-          entityId: permission._id,
-          dbHash: permission.blockchainHash
+          entityId: updatedPermission._id,
+          dbHash: updatedPermission.blockchainHash,
+          currentData: Permission.getCanonicalData(updatedPermission)
         })
       }
     });
@@ -515,13 +490,7 @@ exports.rejectAccess = async (req, res, next) => {
           entityId: permission._id.toString(),
           actorId: patientId.toString(),
           actionType: 'REJECT',
-          hashSource: {
-            id: permission._id.toString(),
-            patientId: permission.patient.toString(),
-            doctorId: permission.doctor.toString(),
-            status: permission.status,
-            reason: permission.rejectionReason || reason || ''
-          },
+          hashSource: Permission.getCanonicalData(permission),
           previousSnapshot,
           dbState: {
             model: 'Permission',
@@ -548,36 +517,24 @@ exports.rejectAccess = async (req, res, next) => {
       hashFromResult
     );
 
-    await permission.populate('doctor', 'firstName lastName email');
-
-    console.log(`❌ Permission rejected:`, {
-      permissionId: permission._id,
-      patientId: patientId,
-      doctorId: permission.doctor._id
-    });
-
-    // Notify doctor that access was rejected
-    notify(permission.doctor._id, {
-      type: 'permission',
-      title: 'Access Request Rejected ❌',
-      message: `Your ${permission.accessType} access request was rejected by the patient.`,
-      priority: 'normal',
-      data: { permissionId: permission._id, accessType: permission.accessType }
-    }).catch(() => {});
+    // Reload the permission to get fresh blockchain fields
+    const updatedPermission = await Permission.findById(permission._id)
+      .populate('doctor', 'firstName lastName email');
 
     res.status(200).json({
       success: true,
       message: 'Access request rejected',
       data: {
-        id: permission._id,
-        doctor: `${permission.doctor.firstName} ${permission.doctor.lastName}`,
-        status: permission.status,
-        rejectedAt: permission.rejectedAt,
-        reason: permission.rejectionReason,
+        id: updatedPermission._id,
+        doctor: `${updatedPermission.doctor.firstName} ${updatedPermission.doctor.lastName}`,
+        status: updatedPermission.status,
+        rejectedAt: updatedPermission.rejectedAt,
+        reason: updatedPermission.rejectionReason,
         verificationStatus: await getVerificationStatusForEntity({
           entityType: 'PERMISSION',
-          entityId: permission._id,
-          dbHash: permission.blockchainHash
+          entityId: updatedPermission._id,
+          dbHash: updatedPermission.blockchainHash,
+          currentData: Permission.getCanonicalData(updatedPermission)
         })
       }
     });
@@ -639,14 +596,7 @@ exports.revokeAccess = async (req, res, next) => {
           actorId: patientId.toString(),
           actionType: 'REVOKE',
           metadata: { event: 'ACCESS_REVOKED' },
-          hashSource: {
-            id: permission._id.toString(),
-            patientId: permission.patient.toString(),
-            doctorId: permission.doctor.toString(),
-            status: permission.status,
-            revokedAt: permission.revokedAt,
-            reason: permission.revocationReason || reason || ''
-          },
+          hashSource: Permission.getCanonicalData(permission),
           previousSnapshot,
           dbState: {
             model: 'Permission',
@@ -673,36 +623,24 @@ exports.revokeAccess = async (req, res, next) => {
       hashFromResult
     );
 
-    await permission.populate('doctor', 'firstName lastName email');
-
-    console.log(`🔓 Permission revoked:`, {
-      permissionId: permission._id,
-      patientId: patientId,
-      doctorId: permission.doctor._id
-    });
-
-    // Notify doctor that access was revoked
-    notify(permission.doctor._id, {
-      type: 'permission',
-      title: 'Access Revoked 🔒',
-      message: `Your ${permission.accessType} access has been revoked by the patient.`,
-      priority: 'high',
-      data: { permissionId: permission._id, accessType: permission.accessType }
-    }).catch(() => {});
+    // Reload the permission to get fresh blockchain fields
+    const updatedPermission = await Permission.findById(permission._id)
+      .populate('doctor', 'firstName lastName email');
 
     res.status(200).json({
       success: true,
       message: 'Access revoked successfully',
       data: {
-        id: permission._id,
-        doctor: `${permission.doctor.firstName} ${permission.doctor.lastName}`,
-        status: permission.status,
-        revokedAt: permission.revokedAt,
-        reason: permission.revocationReason,
+        id: updatedPermission._id,
+        doctor: `${updatedPermission.doctor.firstName} ${updatedPermission.doctor.lastName}`,
+        status: updatedPermission.status,
+        revokedAt: updatedPermission.revokedAt,
+        reason: updatedPermission.revocationReason,
         verificationStatus: await getVerificationStatusForEntity({
           entityType: 'PERMISSION',
-          entityId: permission._id,
-          dbHash: permission.blockchainHash
+          entityId: updatedPermission._id,
+          dbHash: updatedPermission.blockchainHash,
+          currentData: Permission.getCanonicalData(updatedPermission)
         })
       }
     });
@@ -760,7 +698,8 @@ exports.getPatientPermissions = async (req, res, next) => {
     const verifiedPermissions = await attachVerificationStatus(mappedPermissions, {
       entityType: 'PERMISSION',
       getId: (item) => item.id,
-      getHash: (item) => item.blockchainHash
+      getHash: (item) => item.blockchainHash,
+      getCurrentData: (item) => Permission.getCanonicalData(item)
     });
 
     res.status(200).json({
@@ -898,7 +837,8 @@ exports.getDoctorApprovedPermissions = async (req, res, next) => {
     const verifiedDoctorPermissions = await attachVerificationStatus(mappedDoctorPermissions, {
       entityType: 'PERMISSION',
       getId: (item) => item._id,
-      getHash: (item) => item.blockchainHash
+      getHash: (item) => item.blockchainHash,
+      getCurrentData: (item) => Permission.getCanonicalData(permissions.find(p => p._id.toString() === item._id?.toString()))
     });
 
     res.status(200).json({

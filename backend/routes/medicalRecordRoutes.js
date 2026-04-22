@@ -22,25 +22,6 @@ const getFileType = (mimetype) => {
   return 'other';
 };
 
-// Helper: build current-data payload for tamper detection
-const getMedicalRecordCurrentData = (item) => ({
-  id: item._id?.toString(),
-  patient: item.patient?.toString(),
-  uploadedBy: item.uploadedBy?.toString(),
-  hospital: item.hospital ? item.hospital?.toString() : null,
-  title: item.title,
-  description: item.description,
-  fileHash: item.fileHash,
-  fileName: item.fileName,
-  fileSize: item.fileSize,
-  fileType: item.fileType,
-  mimeType: item.mimeType,
-  recordType: item.recordType,
-  clinicalData: item.clinicalData || {},  // MongoDB returns undefined when empty; upload writes {}
-  tags: item.tags || [],
-  status: item.status
-});
-
 // Multer error handler middleware
 const handleMulterError = (err, req, res, next) => {
   if (err) {
@@ -166,23 +147,7 @@ router.post('/upload', protect, (req, res, next) => {
         entityId: medicalRecord._id.toString(),
         actorId: req.user.id.toString(),
         actionType: 'CREATE',
-        hashSource: {
-          id: medicalRecord._id.toString(),
-          patient: medicalRecord.patient.toString(),
-          uploadedBy: medicalRecord.uploadedBy.toString(),
-          hospital: medicalRecord.hospital ? medicalRecord.hospital.toString() : null,
-          title: medicalRecord.title,
-          description: medicalRecord.description,
-          fileHash: medicalRecord.fileHash,
-          fileName: medicalRecord.fileName,
-          fileSize: medicalRecord.fileSize,
-          fileType: medicalRecord.fileType,
-          mimeType: medicalRecord.mimeType,
-          recordType: medicalRecord.recordType,
-          clinicalData: medicalRecord.clinicalData,
-          tags: medicalRecord.tags || [],
-          status: medicalRecord.status
-        },
+        hashSource: MedicalRecord.getCanonicalData(medicalRecord),
         metadata: {
           storageMode: medicalRecord.storageMode
         },
@@ -218,23 +183,30 @@ router.post('/upload', protect, (req, res, next) => {
       hashFromResult
     );
 
-    await medicalRecord.populate([
-      { path: 'uploadedBy', select: 'firstName lastName role' },
-      { path: 'hospital', select: 'name' }
-    ]);
+    // Reload the record to get the blockchainHash and blockchainTimestamp updated by the onSuccess callback
+    const updatedRecord = await MedicalRecord.findById(medicalRecord._id)
+      .populate([
+        { path: 'uploadedBy', select: 'firstName lastName role' },
+        { path: 'hospital', select: 'name' }
+      ]);
 
-    console.log('✅ Record created:', medicalRecord._id, '| storage:', storageMode);
+    if (!updatedRecord) {
+      throw new Error('Failed to reload record after blockchain write');
+    }
+
+    console.log('✅ Record created:', updatedRecord._id, '| storage:', storageMode);
 
     res.status(201).json({
       success: true,
       message: 'Medical record uploaded successfully',
       data: {
         record: {
-          ...medicalRecord.toObject(),
+          ...updatedRecord.toObject(),
           verificationStatus: await getVerificationStatusForEntity({
             entityType: 'MEDICAL_RECORD',
-            entityId: medicalRecord._id,
-            dbHash: medicalRecord.blockchainHash
+            entityId: updatedRecord._id,
+            dbHash: updatedRecord.blockchainHash,
+            currentData: MedicalRecord.getCanonicalData(updatedRecord)
           })
         }
       }
@@ -296,7 +268,7 @@ router.get('/my-records', protect, async (req, res) => {
         entityType: 'MEDICAL_RECORD',
         getId: (item) => item._id,
         getHash: (item) => item.blockchainHash,
-        getCurrentData: getMedicalRecordCurrentData
+        getCurrentData: (item) => MedicalRecord.getCanonicalData(item)
       }
     );
 
@@ -417,7 +389,7 @@ router.get('/patient/:patientId', protect, async (req, res) => {
         entityType: 'MEDICAL_RECORD',
         getId: (item) => item._id,
         getHash: (item) => item.blockchainHash,
-        getCurrentData: getMedicalRecordCurrentData
+        getCurrentData: (item) => MedicalRecord.getCanonicalData(item)
       }
     );
 
@@ -618,11 +590,18 @@ router.patch('/:recordId', protect, async (req, res) => {
       });
     }
 
-    // Only patient owner can update
-    if (record.patient.toString() !== req.user.id) {
+    // Only patient owner or uploader can update
+    const patientId = record.patient?._id?.toString() || record.patient?.toString();
+    const uploadedById = record.uploadedBy?._id?.toString() || record.uploadedBy?.toString();
+    const currentUserId = req.user.id?.toString() || req.user._id?.toString();
+
+    const isOwner = (patientId && patientId === currentUserId) || 
+                    (uploadedById && uploadedById === currentUserId);
+
+    if (!isOwner) {
       return res.status(403).json({
         success: false,
-        message: 'Only the record owner can update this record'
+        message: 'Permission denied: Only the patient or the uploader can update this record'
       });
     }
 
@@ -649,17 +628,7 @@ router.patch('/:recordId', protect, async (req, res) => {
         entityId: record._id.toString(),
         actorId: req.user.id.toString(),
         actionType: 'UPDATE',
-        hashSource: {
-          id: record._id.toString(),
-          patient: record.patient.toString(),
-          title: record.title,
-          description: record.description,
-          recordType: record.recordType,
-          tags: record.tags,
-          clinicalData: record.clinicalData,
-          status: record.status,
-          fileHash: record.fileHash
-        },
+        hashSource: MedicalRecord.getCanonicalData(record),
         dbState: {
           model: 'MedicalRecord',
           operation: 'UPDATE',
@@ -692,16 +661,20 @@ router.patch('/:recordId', protect, async (req, res) => {
       hashFromResult
     );
 
+    // Reload the record to get updated blockchain fields
+    const updatedRecord = await MedicalRecord.findById(record._id);
+
     res.json({
       success: true,
       message: 'Record updated successfully',
       data: {
         record: {
-          ...record.toObject(),
+          ...updatedRecord.toObject(),
           verificationStatus: await getVerificationStatusForEntity({
             entityType: 'MEDICAL_RECORD',
-            entityId: record._id,
-            dbHash: record.blockchainHash
+            entityId: updatedRecord._id,
+            dbHash: updatedRecord.blockchainHash,
+            currentData: MedicalRecord.getCanonicalData(updatedRecord)
           })
         }
       }
@@ -733,11 +706,19 @@ router.delete('/:recordId', protect, async (req, res) => {
       });
     }
 
-    // Only patient owner can delete
-    if (record.patient.toString() !== req.user.id) {
+    // Only patient owner or uploader can delete
+    const patientId = record.patient?._id?.toString() || record.patient?.toString();
+    const uploadedById = record.uploadedBy?._id?.toString() || record.uploadedBy?.toString();
+    const currentUserId = req.user.id?.toString() || req.user._id?.toString();
+
+    const isOwner = (patientId && patientId === currentUserId) || 
+                    (uploadedById && uploadedById === currentUserId);
+
+    if (!isOwner) {
+      console.log('❌ Deletion denied:', { patientId, uploadedById, currentUserId, recordId });
       return res.status(403).json({
         success: false,
-        message: 'Only the record owner can delete this record'
+        message: 'Permission denied: Only the patient or the uploader can delete this record'
       });
     }
 
@@ -753,11 +734,7 @@ router.delete('/:recordId', protect, async (req, res) => {
         entityId: record._id.toString(),
         actorId: req.user.id.toString(),
         actionType: 'UPDATE',
-        hashSource: {
-          id: record._id.toString(),
-          patient: record.patient.toString(),
-          status: record.status
-        },
+        hashSource: MedicalRecord.getCanonicalData(record),
         metadata: {
           event: 'SOFT_DELETE'
         },
@@ -824,11 +801,18 @@ router.delete('/:recordId/permanent', protect, async (req, res) => {
       });
     }
 
-    // Only patient owner can permanently delete
-    if (record.patient.toString() !== req.user.id) {
+    // Only patient owner or uploader can permanently delete
+    const patientId = record.patient?._id?.toString() || record.patient?.toString();
+    const uploadedById = record.uploadedBy?._id?.toString() || record.uploadedBy?.toString();
+    const currentUserId = req.user.id?.toString() || req.user._id?.toString();
+
+    const isOwner = (patientId && patientId === currentUserId) || 
+                    (uploadedById && uploadedById === currentUserId);
+
+    if (!isOwner) {
       return res.status(403).json({
         success: false,
-        message: 'Only the record owner can permanently delete this record'
+        message: 'Permission denied: Only the patient or the uploader can permanently delete this record'
       });
     }
 
@@ -852,11 +836,7 @@ router.delete('/:recordId/permanent', protect, async (req, res) => {
         entityId: record._id.toString(),
         actorId: req.user.id.toString(),
         actionType: 'UPDATE',
-        hashSource: {
-          id: record._id.toString(),
-          patient: record.patient.toString(),
-          status: 'permanently_deleted'
-        },
+        hashSource: { ...MedicalRecord.getCanonicalData(record), status: 'permanently_deleted' },
         metadata: {
           event: 'HARD_DELETE'
         },

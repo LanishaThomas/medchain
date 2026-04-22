@@ -610,7 +610,7 @@ export default function MedicalRecordsComponent() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {(record.verificationStatus || 'TAMPERED') === 'VERIFIED' ? (
+                    {(record.verificationStatus || 'UNVERIFIED') === 'VERIFIED' ? (
                       <span className="text-xs px-2 py-1 rounded font-semibold bg-green-100 text-green-800">✅ Verified</span>
                     ) : (
                       <span className="text-xs px-2 py-1 rounded font-bold bg-red-600 text-white animate-pulse">🚨 TAMPERED</span>
@@ -766,7 +766,7 @@ export default function MedicalRecordsComponent() {
                 <div>
                   <label className="text-sm text-gray-500">Verification</label>
                   <p>
-                    {(viewingRecord.verificationStatus || 'TAMPERED') === 'VERIFIED' ? (
+                    {(viewingRecord.verificationStatus || 'UNVERIFIED') === 'VERIFIED' ? (
                       <span className="text-xs px-2 py-1 rounded font-semibold bg-green-100 text-green-800">✅ Verified</span>
                     ) : (
                       <span className="text-xs px-2 py-1 rounded font-bold bg-red-600 text-white animate-pulse">🚨 TAMPERED</span>

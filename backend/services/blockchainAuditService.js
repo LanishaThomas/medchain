@@ -93,7 +93,10 @@ function deterministicStringify(data) {
 
 function buildDeterministicHash(data) {
   const serialized = deterministicStringify(data);
-  return ethers.keccak256(ethers.toUtf8Bytes(serialized));
+  const hash = ethers.keccak256(ethers.toUtf8Bytes(serialized));
+  // Debug log to help identify tampering false positives
+  console.log(`[BLOCKCHAIN_DEBUG] Hashing Data: ${serialized.substring(0, 200)}... Hash: ${hash}`);
+  return hash;
 }
 
 function getClient() {

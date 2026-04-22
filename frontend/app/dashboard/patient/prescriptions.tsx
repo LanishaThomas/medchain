@@ -132,7 +132,7 @@ export default function PatientPrescriptionsComponent() {
                   Last Modified: {new Date(item.updatedAt || item.createdAt).toLocaleString()}
                 </span>
                 <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 capitalize">{item.status}</span>
-                {(item.verificationStatus || 'TAMPERED') === 'VERIFIED' ? (
+                {(item.verificationStatus || 'UNVERIFIED') === 'VERIFIED' ? (
                   <span className="text-xs px-2 py-1 rounded font-semibold bg-green-100 text-green-800">✅ Verified</span>
                 ) : (
                   <span className="text-xs px-2 py-1 rounded font-bold bg-red-600 text-white animate-pulse">🚨 TAMPERED</span>
